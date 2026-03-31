@@ -1,0 +1,8 @@
+.vscode/
+bin/
+*.swp
+.handoff/
+pm/
+CLAUDE.md
+.context/
+.claude/

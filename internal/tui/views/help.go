@@ -1,0 +1,97 @@
+package views
+
+import (
+	"strings"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/idesyatov/wharf/internal/ui"
+)
+
+type SwitchToHelpMsg struct{}
+type SwitchBackFromHelpMsg struct{}
+
+type HelpView struct {
+	width  int
+	height int
+	scroll int
+}
+
+func NewHelpView() HelpView {
+	return HelpView{}
+}
+
+func (v HelpView) SetSize(w, h int) HelpView {
+	v.width = w
+	v.height = h
+	return v
+}
+
+func (v HelpView) Update(msg tea.Msg, keys ui.KeyMap) (HelpView, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch {
+		case ui.MatchKey(msg, keys.Help), ui.MatchKey(msg, keys.Left):
+			return v, func() tea.Msg { return SwitchBackFromHelpMsg{} }
+		case ui.MatchKey(msg, keys.Down):
+			v.scroll++
+		case ui.MatchKey(msg, keys.Up):
+			if v.scroll > 0 {
+				v.scroll--
+			}
+		}
+	}
+	return v, nil
+}
+
+var helpText = strings.TrimSpace(`
+  Navigation
+    j / k / ↑ / ↓    Move cursor up/down
+    h / ← / Esc      Go back
+    l / → / Enter     Select / drill down
+    gg                Jump to top
+    G                 Jump to bottom
+
+  Actions (Services view)
+    s                 Start service
+    S                 Stop service
+    r                 Restart service
+    L                 View logs
+    u                 Compose up
+    d                 Compose down (confirm)
+    c                 View compose file
+    v                 View volumes
+    n                 View networks
+
+  Volumes view
+    x                 Remove volume (confirm)
+    P                 Prune dangling volumes
+
+  Logs view
+    f                 Toggle follow mode
+    j / k             Scroll up/down
+
+  General
+    /                 Filter (search)
+    ?                 Show this help
+    q                 Quit
+    :q                Quit (vim-style)
+
+                      Press ? or Esc to close
+`)
+
+func (v HelpView) View() string {
+	lines := strings.Split(helpText, "\n")
+	visible := v.height - 2
+	if visible < 1 {
+		visible = 1
+	}
+	start := v.scroll
+	if start >= len(lines) {
+		start = len(lines) - 1
+	}
+	end := start + visible
+	if end > len(lines) {
+		end = len(lines)
+	}
+	return strings.Join(lines[start:end], "\n")
+}
