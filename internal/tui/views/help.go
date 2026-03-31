@@ -56,21 +56,36 @@ var helpText = strings.TrimSpace(`
     S                 Stop service
     r                 Restart service
     L                 View logs
+    e                 Exec into container (shell)
+    b                 Build service
+    B                 Build all services
     u                 Compose up
     d                 Compose down (confirm)
     c                 View compose file
     v                 View volumes
     n                 View networks
 
+  Projects view
+    i                 View images
+
   Volumes view
     x                 Remove volume (confirm)
     P                 Prune dangling volumes
+
+  Images view
+    p                 Pull image
+    P                 Prune unused images
 
   Logs view
     f                 Toggle follow mode
     j / k             Scroll up/down
 
+  Clipboard
+    y                 Copy container ID / project name
+    Y                 Copy extended info (Detail view)
+
   General
+    *                 Toggle bookmark (Projects view)
     /                 Filter (search)
     ?                 Show this help
     q                 Quit

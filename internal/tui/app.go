@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -23,6 +24,7 @@ const (
 	viewCompose
 	viewVolumes
 	viewNetworks
+	viewImages
 	viewHelp
 )
 
@@ -38,6 +40,7 @@ type App struct {
 	composeView     views.ComposeView
 	volumesView     views.VolumesView
 	networksView    views.NetworksView
+	imagesView      views.ImagesView
 	helpView        views.HelpView
 	docker          *docker.Client
 	cfg             *config.Config
@@ -57,7 +60,7 @@ func NewApp(cfg *config.Config) App {
 	keys = ui.ApplyKeyBindings(keys, cfg.KeyBindings)
 	return App{
 		state:        viewProjects,
-		projectsView: views.NewProjectsView(cfg.PollInterval),
+		projectsView: views.NewProjectsView(cfg.PollInterval, cfg),
 		keys:         keys,
 		docker:       client,
 		cfg:          cfg,
@@ -80,14 +83,15 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
 		a.height = msg.Height
-		a.projectsView = a.projectsView.SetSize(msg.Width, msg.Height-4)
-		a.servicesView = a.servicesView.SetSize(msg.Width, msg.Height-4)
-		a.detailView = a.detailView.SetSize(msg.Width, msg.Height-4)
-		a.logsView = a.logsView.SetSize(msg.Width, msg.Height-4)
-		a.composeView = a.composeView.SetSize(msg.Width, msg.Height-4)
-		a.volumesView = a.volumesView.SetSize(msg.Width, msg.Height-4)
-		a.networksView = a.networksView.SetSize(msg.Width, msg.Height-4)
-		a.helpView = a.helpView.SetSize(msg.Width, msg.Height-4)
+		a.projectsView = a.projectsView.SetSize(msg.Width, msg.Height-6)
+		a.servicesView = a.servicesView.SetSize(msg.Width, msg.Height-6)
+		a.detailView = a.detailView.SetSize(msg.Width, msg.Height-6)
+		a.logsView = a.logsView.SetSize(msg.Width, msg.Height-6)
+		a.composeView = a.composeView.SetSize(msg.Width, msg.Height-6)
+		a.volumesView = a.volumesView.SetSize(msg.Width, msg.Height-6)
+		a.networksView = a.networksView.SetSize(msg.Width, msg.Height-6)
+		a.imagesView = a.imagesView.SetSize(msg.Width, msg.Height-6)
+		a.helpView = a.helpView.SetSize(msg.Width, msg.Height-6)
 		return a, nil
 
 	// --- View switching ---
@@ -197,6 +201,121 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.networksView, _ = a.networksView.Update(msg, a.keys)
 		return a, nil
 
+	case views.BookmarkToggleMsg:
+		if a.cfg != nil {
+			a.cfg.ToggleBookmark(msg.ProjectName)
+			_ = a.cfg.Save()
+			if a.cfg.IsBookmarked(msg.ProjectName) {
+				a.notification = "★ " + msg.ProjectName
+			} else {
+				a.notification = "☆ " + msg.ProjectName
+			}
+			a.notificationErr = false
+			a.notificationExp = time.Now().Add(2 * time.Second)
+			return a, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+		}
+		return a, nil
+
+	case views.CopyMsg:
+		ui.CopyToClipboard(msg.Text)
+		a.notification = "Copied: " + msg.Label
+		a.notificationErr = false
+		a.notificationExp = time.Now().Add(2 * time.Second)
+		return a, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+
+	case views.SwitchToImagesMsg:
+		a.prevState = a.state
+		a.state = viewImages
+		a.imagesView = views.NewImagesView().SetSize(a.width, a.height-4)
+		return a, views.LoadImages(a.docker)
+
+	case views.SwitchBackFromImagesMsg:
+		a.state = viewProjects
+		return a, nil
+
+	case views.ImagesLoadedMsg:
+		a.imagesView, _ = a.imagesView.Update(msg, a.keys)
+		return a, nil
+
+	case views.PullImageActionMsg:
+		a.notification = "pulling " + msg.Ref + "..."
+		a.notificationErr = false
+		a.notificationExp = time.Now().Add(60 * time.Second)
+		return a, views.PullImage(a.docker, msg.Ref)
+
+	case views.ImagePulledMsg:
+		if msg.Err != nil {
+			a.notification = "pull " + msg.ImageRef + ": " + msg.Err.Error()
+			a.notificationErr = true
+		} else {
+			a.notification = "pulled " + msg.ImageRef
+			a.notificationErr = false
+		}
+		a.notificationExp = time.Now().Add(3 * time.Second)
+		return a, tea.Batch(
+			views.LoadImages(a.docker),
+			tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} }),
+		)
+
+	case views.PruneImagesActionMsg:
+		return a, views.PruneImages(a.docker)
+
+	case views.ImagesPrunedMsg:
+		if msg.Err != nil {
+			a.notification = "prune images: " + msg.Err.Error()
+			a.notificationErr = true
+		} else {
+			a.notification = fmt.Sprintf("pruned %d images, reclaimed %s", msg.Count, views.FormatBytes(msg.Reclaimed))
+			a.notificationErr = false
+		}
+		a.notificationExp = time.Now().Add(3 * time.Second)
+		return a, tea.Batch(
+			views.LoadImages(a.docker),
+			tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} }),
+		)
+
+	// --- Build ---
+
+	case views.BuildMsg:
+		composePath := ""
+		if msg.ComposePath != "" {
+			composePath = msg.ComposePath
+		}
+		_ = composePath // ComposeBuild finds file itself
+		svcName := msg.Service
+		if svcName == "" {
+			svcName = "all"
+		}
+		args := []string{"compose"}
+		if msg.ProjectPath != "" {
+			cf, err := docker.FindComposeFile(msg.ProjectPath)
+			if err == nil {
+				args = append(args, "-f", cf)
+			}
+		}
+		args = append(args, "build")
+		if msg.Service != "" {
+			args = append(args, msg.Service)
+		}
+		c := exec.Command("docker", args...)
+		c.Dir = msg.ProjectPath
+		return a, tea.ExecProcess(c, func(err error) tea.Msg {
+			return views.BuildDoneMsg{Err: err, Service: svcName}
+		})
+
+	case views.BuildDoneMsg:
+		if msg.Err != nil {
+			a.notification = "build " + msg.Service + ": " + msg.Err.Error()
+			a.notificationErr = true
+		} else {
+			a.notification = "build " + msg.Service + ": OK"
+			a.notificationErr = false
+		}
+		a.notificationExp = time.Now().Add(3 * time.Second)
+		return a, tea.Tick(3*time.Second, func(time.Time) tea.Msg {
+			return notificationClearMsg{}
+		})
+
 	case views.SwitchToHelpMsg:
 		a.prevState = a.state
 		a.state = viewHelp
@@ -287,6 +406,29 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
+	// --- Exec ---
+
+	case views.ExecMsg:
+		shell := msg.Shell
+		if shell == "" {
+			shell = a.docker.DetectShell(context.Background(), msg.ContainerID)
+		}
+		c := exec.Command("docker", "exec", "-it", msg.ContainerID, shell)
+		return a, tea.ExecProcess(c, func(err error) tea.Msg {
+			return views.ExecDoneMsg{Err: err}
+		})
+
+	case views.ExecDoneMsg:
+		if msg.Err != nil {
+			a.notification = "exec: " + msg.Err.Error()
+			a.notificationErr = true
+			a.notificationExp = time.Now().Add(3 * time.Second)
+			return a, tea.Tick(3*time.Second, func(time.Time) tea.Msg {
+				return notificationClearMsg{}
+			})
+		}
+		return a, nil
+
 	// --- Quit ---
 
 	case tea.KeyMsg:
@@ -302,7 +444,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.cleanup()
 				return a, tea.Quit
 			}
-			// Not q after colon — ignore and continue
 			break
 		}
 
@@ -336,6 +477,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.volumesView, cmd = a.volumesView.Update(msg, a.keys)
 	case viewNetworks:
 		a.networksView, cmd = a.networksView.Update(msg, a.keys)
+	case viewImages:
+		a.imagesView, cmd = a.imagesView.Update(msg, a.keys)
 	case viewHelp:
 		a.helpView, cmd = a.helpView.Update(msg, a.keys)
 	}
@@ -353,16 +496,146 @@ func (a App) isFilterMode() bool {
 }
 
 func (a App) View() string {
-	header := ui.HeaderStyle.Width(a.width).Render(a.headerText())
+	infoBar := a.renderInfoBar()
+	breadcrumbs := a.renderBreadcrumbs()
+	content := a.renderContent()
+	menuBar := a.renderMenuBar()
+	statusLine := a.renderStatusLine()
 
-	var content string
+	return lipgloss.JoinVertical(lipgloss.Left, infoBar, breadcrumbs, content, menuBar, statusLine)
+}
+
+func (a App) renderInfoBar() string {
+	logo := ui.LogoStyle.Render("⚓ Wharf")
+
+	dockerStatus := ui.RunningStyle.Render("●")
 	if a.err != nil {
-		content = ui.ContentStyle.
-			Width(a.width).
-			Height(a.height - 4).
-			Render(ui.ErrorStyle.Render("Docker error: " + a.err.Error()))
+		dockerStatus = ui.ErrorStyle.Render("●")
+	}
+	right := ui.InfoBarStyle.Render("Docker: ") + dockerStatus
+
+	gap := a.width - lipgloss.Width(logo) - lipgloss.Width(right)
+	if gap < 1 {
+		gap = 1
+	}
+	pad := lipgloss.NewStyle().Width(gap).Render("")
+
+	return logo + pad + right
+}
+
+func (a App) renderBreadcrumbs() string {
+	var crumb string
+	switch a.state {
+	case viewProjects:
+		crumb = ""
+	case viewServices:
+		crumb = "› " + a.servicesView.ProjectName()
+	case viewDetail:
+		crumb = "› " + a.detailView.ProjectName() + " › " + a.detailView.ServiceName()
+	case viewLogs:
+		crumb = "› " + a.servicesView.ProjectName() + " › " + a.logsView.ContainerName() + " [LOGS]"
+	case viewCompose:
+		crumb = "› " + a.composeView.ProjectName() + " › " + a.composeView.FileName()
+	case viewVolumes:
+		crumb = "› " + a.volumesView.ProjectName() + " › Volumes"
+	case viewNetworks:
+		crumb = "› " + a.networksView.ProjectName() + " › Networks"
+	case viewImages:
+		crumb = "› Images"
+	case viewHelp:
+		crumb = "Help"
+	}
+
+	style := lipgloss.NewStyle().
+		Foreground(ui.ColorMuted).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderBottom(true).
+		BorderForeground(ui.ColorBorder).
+		Width(a.width).
+		Padding(0, 1)
+
+	return style.Render(crumb)
+}
+
+func (a App) renderMenuBar() string {
+	var items []string
+
+	switch a.state {
+	case viewProjects:
+		items = []string{
+			ui.FormatMenuItem("i", "mages"),
+			ui.FormatMenuItem("u", "p"),
+			ui.FormatMenuItem("d", "own"),
+			ui.FormatMenuItem("*", "mark"),
+			ui.FormatMenuItem("/", "filter"),
+			ui.FormatMenuItem("?", "help"),
+		}
+	case viewServices:
+		items = []string{
+			ui.FormatMenuItem("s", "tart"),
+			ui.FormatMenuItem("S", "top"),
+			ui.FormatMenuItem("r", "estart"),
+			ui.FormatMenuItem("e", "xec"),
+			ui.FormatMenuItem("b", "uild"),
+			ui.FormatMenuItem("u", "p"),
+			ui.FormatMenuItem("d", "own"),
+			ui.FormatMenuItem("L", "ogs"),
+			ui.FormatMenuItem("c", "ompose"),
+			ui.FormatMenuItem("v", "ol"),
+			ui.FormatMenuItem("n", "et"),
+			ui.FormatMenuItem("/", "filter"),
+		}
+	case viewDetail:
+		items = []string{
+			ui.FormatMenuItem("L", "ogs"),
+			ui.FormatMenuItem("e", "xec"),
+			ui.FormatMenuItem("y", "copy"),
+			ui.FormatMenuItem("Y", "copy+"),
+		}
+	case viewLogs:
+		items = []string{
+			ui.FormatMenuItem("f", "ollow"),
+		}
+	case viewVolumes:
+		items = []string{
+			ui.FormatMenuItem("x", "remove"),
+			ui.FormatMenuItem("P", "rune"),
+		}
+	case viewImages:
+		items = []string{
+			ui.FormatMenuItem("p", "ull"),
+			ui.FormatMenuItem("P", "rune"),
+		}
+	}
+
+	joined := ""
+	for i, item := range items {
+		if i > 0 {
+			joined += "  "
+		}
+		joined += item
+	}
+
+	style := lipgloss.NewStyle().
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderTop(true).
+		BorderForeground(ui.ColorBorder).
+		Width(a.width).
+		Padding(0, 1)
+
+	return style.Render(joined)
+}
+
+func (a App) renderContent() string {
+	contentHeight := a.height - 6 // info 1 + breadcrumbs 2 (border) + menu 2 (border) + status 1
+	if contentHeight < 1 {
+		contentHeight = 1
+	}
+
+	var viewContent string
+	if a.err != nil {
+		viewContent = ui.ErrorStyle.Render("Docker error: " + a.err.Error())
 	} else {
-		var viewContent string
 		switch a.state {
 		case viewProjects:
 			viewContent = a.projectsView.View()
@@ -378,48 +651,24 @@ func (a App) View() string {
 			viewContent = a.volumesView.View()
 		case viewNetworks:
 			viewContent = a.networksView.View()
+		case viewImages:
+			viewContent = a.imagesView.View()
 		case viewHelp:
 			viewContent = a.helpView.View()
 		}
-		content = ui.ContentStyle.
-			Width(a.width).
-			Height(a.height - 4).
-			Render(viewContent)
 	}
 
-	footer := ui.FooterStyle.Width(a.width).Render(a.footerText())
-
-	return lipgloss.JoinVertical(lipgloss.Left, header, content, footer)
+	return ui.ContentStyle.
+		Width(a.width).
+		Height(contentHeight).
+		Render(viewContent)
 }
 
-func (a App) headerText() string {
-	switch a.state {
-	case viewServices:
-		return "⚓ Wharf › " + a.servicesView.ProjectName()
-	case viewDetail:
-		return "⚓ Wharf › " + a.detailView.ProjectName() + " › " + a.detailView.ServiceName()
-	case viewLogs:
-		return "⚓ Wharf › " + a.servicesView.ProjectName() + " › " + a.logsView.ContainerName() + " [LOGS]"
-	case viewCompose:
-		return "⚓ Wharf › " + a.composeView.ProjectName() + " › " + a.composeView.FileName()
-	case viewVolumes:
-		return "⚓ Wharf › " + a.volumesView.ProjectName() + " › Volumes"
-	case viewNetworks:
-		return "⚓ Wharf › " + a.networksView.ProjectName() + " › Networks"
-	case viewHelp:
-		return "⚓ Wharf — Help"
-	default:
-		return "⚓ Wharf"
-	}
-}
-
-func (a App) footerText() string {
-	// Pending colon indicator
+func (a App) renderStatusLine() string {
 	if a.pendingColon {
-		return ":"
+		return ui.CommandStyle.Render(":")
 	}
 
-	// Notification takes priority
 	if a.notification != "" && time.Now().Before(a.notificationExp) {
 		if a.notificationErr {
 			return ui.ErrorStyle.Render(a.notification)
@@ -427,23 +676,24 @@ func (a App) footerText() string {
 		return ui.RunningStyle.Render(a.notification)
 	}
 
-	// Confirmation dialog
+	// Confirmation dialogs
 	if a.state == viewProjects && a.projectsView.PendingDown() {
-		return ui.ErrorStyle.Render("Down project \"" + a.projectsView.PendingDownName() + "\"? Press y to confirm, any key to cancel")
+		return ui.ErrorStyle.Render("Down project \"" + a.projectsView.PendingDownName() + "\"? [y/N]")
 	}
 	if a.state == viewServices && a.servicesView.PendingDown() {
-		return ui.ErrorStyle.Render("Down project \"" + a.servicesView.PendingDownName() + "\"? Press y to confirm, any key to cancel")
+		return ui.ErrorStyle.Render("Down project \"" + a.servicesView.PendingDownName() + "\"? [y/N]")
 	}
-
-	// Volume/network confirmations
 	if a.state == viewVolumes && a.volumesView.PendingRemove() {
-		return ui.ErrorStyle.Render("Remove volume \"" + a.volumesView.PendingVolName() + "\"? Press y to confirm, any key to cancel")
+		return ui.ErrorStyle.Render("Remove volume \"" + a.volumesView.PendingVolName() + "\"? [y/N]")
 	}
 	if a.state == viewVolumes && a.volumesView.PendingPrune() {
-		return ui.ErrorStyle.Render("Remove all unused volumes? Press y to confirm, any key to cancel")
+		return ui.ErrorStyle.Render("Remove all unused volumes? [y/N]")
+	}
+	if a.state == viewImages && a.imagesView.PendingPrune() {
+		return ui.ErrorStyle.Render("Remove all unused images? [y/N]")
 	}
 
-	// Filter mode input
+	// Filter mode
 	if a.state == viewProjects && a.projectsView.FilterMode() {
 		return ui.FilterInputStyle.Render("/ " + a.projectsView.FilterText() + "█")
 	}
@@ -451,24 +701,7 @@ func (a App) footerText() string {
 		return ui.FilterInputStyle.Render("/ " + a.servicesView.FilterText() + "█")
 	}
 
-	switch a.state {
-	case viewServices:
-		return "j/k navigate • Enter details • L logs • h back • s start • S stop • r restart • u up • d down • / filter • :q quit"
-	case viewDetail:
-		return "j/k scroll • L logs • h back • :q quit"
-	case viewCompose:
-		return "j/k scroll • gg/G top/bottom • h back • :q quit"
-	case viewVolumes:
-		return "j/k navigate • x remove • P prune dangling • h back • :q quit"
-	case viewNetworks:
-		return "j/k navigate • Enter details • h back • :q quit"
-	case viewLogs:
-		return "j/k scroll • f follow • G bottom • h back • :q quit"
-	case viewHelp:
-		return "? or Esc to close"
-	default:
-		return "j/k navigate • Enter select • u up • d down • / filter • :q quit • ? help"
-	}
+	return ""
 }
 
 func (a App) executeAction(action string, svc docker.Service) tea.Cmd {

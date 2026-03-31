@@ -14,6 +14,8 @@ type Config struct {
 	LogTail      int               `yaml:"log_tail"`
 	MaxLogLines  int               `yaml:"max_log_lines"`
 	KeyBindings  map[string]string `yaml:"keybindings"`
+	Bookmarks    []string          `yaml:"bookmarks"`
+	Theme        string            `yaml:"theme"`
 }
 
 func Default() *Config {
@@ -21,6 +23,7 @@ func Default() *Config {
 		PollInterval: 2 * time.Second,
 		LogTail:      100,
 		MaxLogLines:  1000,
+		Theme:        "auto",
 	}
 }
 
@@ -52,8 +55,46 @@ func Load() (*Config, error) {
 	if cfg.MaxLogLines <= 0 {
 		cfg.MaxLogLines = 1000
 	}
+	if cfg.Theme == "" {
+		cfg.Theme = "auto"
+	}
 
 	return cfg, nil
+}
+
+func (c *Config) IsBookmarked(name string) bool {
+	for _, b := range c.Bookmarks {
+		if b == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Config) ToggleBookmark(name string) {
+	for i, b := range c.Bookmarks {
+		if b == name {
+			c.Bookmarks = append(c.Bookmarks[:i], c.Bookmarks[i+1:]...)
+			return
+		}
+	}
+	c.Bookmarks = append(c.Bookmarks, name)
+}
+
+func (c *Config) Save() error {
+	path, err := configPath()
+	if err != nil {
+		return err
+	}
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("create config dir: %w", err)
+	}
+	data, err := yaml.Marshal(c)
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+	return os.WriteFile(path, data, 0644)
 }
 
 func Path() string {
@@ -77,6 +118,10 @@ func (c *Config) String() string {
 	out += fmt.Sprintf("poll_interval: %s\n", c.PollInterval)
 	out += fmt.Sprintf("log_tail: %d\n", c.LogTail)
 	out += fmt.Sprintf("max_log_lines: %d\n", c.MaxLogLines)
+	out += fmt.Sprintf("theme: %s\n", c.Theme)
+	if len(c.Bookmarks) > 0 {
+		out += fmt.Sprintf("bookmarks: %v\n", c.Bookmarks)
+	}
 	if len(c.KeyBindings) > 0 {
 		out += "keybindings:\n"
 		for k, v := range c.KeyBindings {

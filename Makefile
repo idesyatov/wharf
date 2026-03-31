@@ -4,9 +4,7 @@
 APP_NAME := wharf
 BUILD_DIR := ./bin
 COMPOSE := docker compose -f docker-compose.dev.yml
-
-# Detect current user UID/GID for fixing Docker file ownership (Linux/macOS)
-FIXPERM := $(COMPOSE) run --rm dev chown -R $(shell id -u 2>/dev/null || echo 1000):$(shell id -g 2>/dev/null || echo 1000) $(BUILD_DIR) 2>/dev/null || true
+BUILDFLAGS := -buildvcs=false
 
 # Default target
 .PHONY: all build build-all run test vet lint clean \
@@ -73,28 +71,28 @@ docker-build: docker-build-linux
 docker-build-linux:
 	@echo "Building for Linux amd64..."
 	@$(COMPOSE) run --rm -e CGO_ENABLED=0 -e GOOS=linux -e GOARCH=amd64 dev \
-		sh -c "mkdir -p $(BUILD_DIR) && go build -o $(BUILD_DIR)/$(APP_NAME)-linux-amd64 ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 666 $(BUILD_DIR)/*" \
+		sh -c "mkdir -p $(BUILD_DIR) && go build $(BUILDFLAGS) -o $(BUILD_DIR)/$(APP_NAME)-linux-amd64 ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 666 $(BUILD_DIR)/*" \
 		|| { echo "Build failed"; exit 1; }
 
 # Build for macOS amd64 (Intel)
 docker-build-darwin-amd64:
 	@echo "Building for Darwin amd64..."
 	@$(COMPOSE) run --rm -e CGO_ENABLED=0 -e GOOS=darwin -e GOARCH=amd64 dev \
-		sh -c "mkdir -p $(BUILD_DIR) && go build -o $(BUILD_DIR)/$(APP_NAME)-darwin-amd64 ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 666 $(BUILD_DIR)/*" \
+		sh -c "mkdir -p $(BUILD_DIR) && go build $(BUILDFLAGS) -o $(BUILD_DIR)/$(APP_NAME)-darwin-amd64 ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 666 $(BUILD_DIR)/*" \
 		|| { echo "Build failed"; exit 1; }
 
 # Build for macOS arm64 (Apple Silicon)
 docker-build-darwin-arm64:
 	@echo "Building for Darwin arm64..."
 	@$(COMPOSE) run --rm -e CGO_ENABLED=0 -e GOOS=darwin -e GOARCH=arm64 dev \
-		sh -c "mkdir -p $(BUILD_DIR) && go build -o $(BUILD_DIR)/$(APP_NAME)-darwin-arm64 ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 666 $(BUILD_DIR)/*" \
+		sh -c "mkdir -p $(BUILD_DIR) && go build $(BUILDFLAGS) -o $(BUILD_DIR)/$(APP_NAME)-darwin-arm64 ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 666 $(BUILD_DIR)/*" \
 		|| { echo "Build failed"; exit 1; }
 
 # Build for Windows amd64
 docker-build-windows:
 	@echo "Building for Windows amd64..."
 	@$(COMPOSE) run --rm -e CGO_ENABLED=0 -e GOOS=windows -e GOARCH=amd64 dev \
-		sh -c "mkdir -p $(BUILD_DIR) && go build -o $(BUILD_DIR)/$(APP_NAME)-windows-amd64.exe ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 666 $(BUILD_DIR)/*" \
+		sh -c "mkdir -p $(BUILD_DIR) && go build $(BUILDFLAGS) -o $(BUILD_DIR)/$(APP_NAME)-windows-amd64.exe ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 666 $(BUILD_DIR)/*" \
 		|| { echo "Build failed"; exit 1; }
 
 # Cross-compile for all platforms
@@ -107,12 +105,12 @@ docker-build-all: docker-build-linux docker-build-darwin-amd64 docker-build-darw
 
 # Run TUI in Docker
 docker-run:
-	@$(COMPOSE) run --rm dev go run ./cmd/wharf
+	@$(COMPOSE) run --rm dev go run $(BUILDFLAGS) ./cmd/wharf
 
 # Run tests in Docker
 docker-test:
 	@echo "Running tests..."
-	@$(COMPOSE) run --rm dev go test ./... || { echo "Tests failed"; exit 1; }
+	@$(COMPOSE) run --rm dev go test $(BUILDFLAGS) ./... || { echo "Tests failed"; exit 1; }
 
 # Run go vet in Docker
 docker-vet:

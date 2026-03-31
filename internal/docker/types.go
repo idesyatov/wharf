@@ -66,6 +66,13 @@ type Stats struct {
 	MemLimit   uint64
 }
 
+type Image struct {
+	ID       string
+	RepoTags []string
+	Size     int64
+	Created  time.Time
+}
+
 type Volume struct {
 	Name       string
 	Driver     string

@@ -106,6 +106,26 @@ func (v DetailView) Update(msg tea.Msg, keys ui.KeyMap) (DetailView, tea.Cmd) {
 				ct := v.service.Containers[0]
 				return v, func() tea.Msg { return SwitchToLogsMsg{Container: ct} }
 			}
+		case ui.MatchKey(msg, keys.Exec):
+			if len(v.service.Containers) > 0 {
+				ct := v.service.Containers[0]
+				if ct.Status != "running" {
+					break
+				}
+				return v, func() tea.Msg {
+					return ExecMsg{ContainerID: ct.ID, Shell: ""}
+				}
+			}
+		case ui.MatchKey(msg, keys.Copy):
+			if v.loaded {
+				id := v.detail.ID
+				return v, func() tea.Msg { return CopyMsg{Text: id, Label: id} }
+			}
+		case ui.MatchKey(msg, keys.CopyFull):
+			if v.loaded {
+				info := fmt.Sprintf("ID: %s\nImage: %s\nStatus: %s", v.detail.ID, v.detail.Image, v.detail.Status)
+				return v, func() tea.Msg { return CopyMsg{Text: info, Label: v.detail.ID} }
+			}
 		}
 	}
 

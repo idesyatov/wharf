@@ -232,6 +232,54 @@ func (c *Client) InspectContainer(ctx context.Context, id string) (ContainerDeta
 	}, nil
 }
 
+func (c *Client) ListImages(ctx context.Context) ([]Image, error) {
+	raw, err := c.cli.ImageList(ctx, types.ImageListOptions{All: false})
+	if err != nil {
+		return nil, fmt.Errorf("list images: %w", err)
+	}
+	var images []Image
+	for _, r := range raw {
+		images = append(images, Image{
+			ID:       r.ID[7:19], // strip sha256: prefix, take 12 chars
+			RepoTags: r.RepoTags,
+			Size:     r.Size,
+			Created:  time.Unix(r.Created, 0),
+		})
+	}
+	sort.Slice(images, func(i, j int) bool {
+		if len(images[i].RepoTags) == 0 || len(images[j].RepoTags) == 0 {
+			return len(images[i].RepoTags) > len(images[j].RepoTags)
+		}
+		return images[i].RepoTags[0] < images[j].RepoTags[0]
+	})
+	return images, nil
+}
+
+func (c *Client) PullImage(ctx context.Context, ref string) error {
+	reader, err := c.cli.ImagePull(ctx, ref, types.ImagePullOptions{})
+	if err != nil {
+		return fmt.Errorf("pull %s: %w", ref, err)
+	}
+	defer reader.Close()
+	// Drain reader to complete pull
+	buf := make([]byte, 4096)
+	for {
+		_, err := reader.Read(buf)
+		if err != nil {
+			break
+		}
+	}
+	return nil
+}
+
+func (c *Client) PruneImages(ctx context.Context) (int, uint64, error) {
+	report, err := c.cli.ImagesPrune(ctx, filters.Args{})
+	if err != nil {
+		return 0, 0, fmt.Errorf("prune images: %w", err)
+	}
+	return len(report.ImagesDeleted), report.SpaceReclaimed, nil
+}
+
 func (c *Client) ListVolumes(ctx context.Context) ([]Volume, error) {
 	resp, err := c.cli.VolumeList(ctx, typesvolume.ListOptions{})
 	if err != nil {
@@ -309,6 +357,24 @@ func (c *Client) ListNetworks(ctx context.Context) ([]Network, error) {
 		return networks[i].Name < networks[j].Name
 	})
 	return networks, nil
+}
+
+func (c *Client) DetectShell(ctx context.Context, containerID string) string {
+	execCfg, err := c.cli.ContainerExecCreate(ctx, containerID, types.ExecConfig{
+		Cmd:          []string{"which", "bash"},
+		AttachStdout: true,
+	})
+	if err == nil {
+		resp, err := c.cli.ContainerExecAttach(ctx, execCfg.ID, types.ExecStartCheck{})
+		if err == nil {
+			resp.Close()
+			inspect, err := c.cli.ContainerExecInspect(ctx, execCfg.ID)
+			if err == nil && inspect.ExitCode == 0 {
+				return "bash"
+			}
+		}
+	}
+	return "sh"
 }
 
 func fromAPIContainer(r types.Container) Container {

@@ -3,14 +3,22 @@ package views
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/idesyatov/wharf/internal/config"
 	"github.com/idesyatov/wharf/internal/docker"
 	"github.com/idesyatov/wharf/internal/ui"
 )
+
+type CopyMsg struct {
+	Text  string
+	Label string
+}
+type BookmarkToggleMsg struct{ ProjectName string }
 
 type ProjectsLoadedMsg struct{ Projects []docker.Project }
 type ProjectsErrorMsg struct{ Err error }
@@ -43,10 +51,11 @@ type ProjectsView struct {
 	pendingDownName string
 	pendingDownPath string
 	pollInterval    time.Duration
+	cfg             *config.Config
 }
 
-func NewProjectsView(pollInterval time.Duration) ProjectsView {
-	return ProjectsView{pollInterval: pollInterval}
+func NewProjectsView(pollInterval time.Duration, cfg *config.Config) ProjectsView {
+	return ProjectsView{pollInterval: pollInterval, cfg: cfg}
 }
 
 func (v ProjectsView) SetSize(w, h int) ProjectsView {
@@ -80,17 +89,32 @@ func TickCmd(interval time.Duration) tea.Cmd {
 }
 
 func (v ProjectsView) filtered() []docker.Project {
+	var src []docker.Project
 	if v.filterText == "" {
-		return v.projects
-	}
-	q := strings.ToLower(v.filterText)
-	var out []docker.Project
-	for _, p := range v.projects {
-		if strings.Contains(strings.ToLower(p.Name), q) {
-			out = append(out, p)
+		src = v.projects
+	} else {
+		q := strings.ToLower(v.filterText)
+		for _, p := range v.projects {
+			if strings.Contains(strings.ToLower(p.Name), q) {
+				src = append(src, p)
+			}
 		}
 	}
-	return out
+	// Sort: bookmarked first, then alphabetical
+	if v.cfg != nil && len(v.cfg.Bookmarks) > 0 {
+		sorted := make([]docker.Project, len(src))
+		copy(sorted, src)
+		sort.SliceStable(sorted, func(i, j int) bool {
+			bi := v.cfg.IsBookmarked(sorted[i].Name)
+			bj := v.cfg.IsBookmarked(sorted[j].Name)
+			if bi != bj {
+				return bi
+			}
+			return false // preserve original order within groups
+		})
+		return sorted
+	}
+	return src
 }
 
 func (v ProjectsView) Update(msg tea.Msg, keys ui.KeyMap) (ProjectsView, tea.Cmd) {
@@ -183,6 +207,8 @@ func (v ProjectsView) Update(msg tea.Msg, keys ui.KeyMap) (ProjectsView, tea.Cmd
 					return SwitchToServicesMsg{Project: p}
 				}
 			}
+		case ui.MatchKey(msg, keys.Images):
+			return v, func() tea.Msg { return SwitchToImagesMsg{} }
 		case ui.MatchKey(msg, keys.ComposeUp):
 			if len(filtered) > 0 {
 				p := filtered[v.cursor]
@@ -196,6 +222,16 @@ func (v ProjectsView) Update(msg tea.Msg, keys ui.KeyMap) (ProjectsView, tea.Cmd
 				v.pendingDown = true
 				v.pendingDownName = p.Name
 				v.pendingDownPath = p.Path
+			}
+		case ui.MatchKey(msg, keys.Bookmark):
+			if len(filtered) > 0 {
+				name := filtered[v.cursor].Name
+				return v, func() tea.Msg { return BookmarkToggleMsg{ProjectName: name} }
+			}
+		case ui.MatchKey(msg, keys.Copy):
+			if len(filtered) > 0 {
+				name := filtered[v.cursor].Name
+				return v, func() tea.Msg { return CopyMsg{Text: name, Label: name} }
 			}
 		}
 	}
@@ -218,12 +254,13 @@ func (v ProjectsView) View() string {
 		return ui.MutedStyle.Render(fmt.Sprintf("No matches for '%s'", v.filterText))
 	}
 
+	colMark := 2
 	colName := 20
 	colStatus := 12
 	colSvc := 12
 
 	header := ui.HeaderRowStyle.Render(
-		fmt.Sprintf("%-*s %-*s %-*s %s", colName, "NAME", colStatus, "STATUS", colSvc, "SERVICES", "PATH"),
+		fmt.Sprintf("%-*s%-*s %-*s %-*s %s", colMark, "", colName, "NAME", colStatus, "STATUS", colSvc, "SERVICES", "PATH"),
 	)
 
 	var rows []string
@@ -239,7 +276,13 @@ func (v ProjectsView) View() string {
 		svcCount := fmt.Sprintf("%d/%d", running, len(p.Services))
 		statusStr := statusText(p.Status)
 
-		row := fmt.Sprintf("%-*s %s %-*s %s",
+		mark := "  "
+		if v.cfg != nil && v.cfg.IsBookmarked(p.Name) {
+			mark = ui.BookmarkStyle.Render("★") + " "
+		}
+
+		row := fmt.Sprintf("%s%-*s %s %-*s %s",
+			mark,
 			colName, truncate(p.Name, colName),
 			padRight(statusStr, colStatus),
 			colSvc, svcCount,

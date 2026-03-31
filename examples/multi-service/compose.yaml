@@ -1,0 +1,29 @@
+services:
+  app:
+    image: busybox
+    command: sh -c "while true; do echo app running; sleep 5; done"
+    restart: unless-stopped
+    environment:
+      - APP_ENV=development
+      - APP_PORT=3000
+
+  worker:
+    image: busybox
+    command: sh -c "while true; do echo worker processing; sleep 10; done"
+    restart: unless-stopped
+    environment:
+      - WORKER_CONCURRENCY=4
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  api:
+    image: nginx:alpine
+    ports:
+      - "8081:80"
+    restart: unless-stopped
+    depends_on:
+      - redis

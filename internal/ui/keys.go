@@ -29,6 +29,14 @@ type KeyMap struct {
 	NetworksKey key.Binding
 	Remove      key.Binding
 	Prune       key.Binding
+	Exec        key.Binding
+	Images      key.Binding
+	Pull        key.Binding
+	Build       key.Binding
+	BuildAll    key.Binding
+	Bookmark    key.Binding
+	Copy        key.Binding
+	CopyFull    key.Binding
 }
 
 func DefaultKeyMap() KeyMap {
@@ -124,6 +132,38 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("P"),
 			key.WithHelp("P", "prune"),
 		),
+		Exec: key.NewBinding(
+			key.WithKeys("e"),
+			key.WithHelp("e", "exec shell"),
+		),
+		Images: key.NewBinding(
+			key.WithKeys("i"),
+			key.WithHelp("i", "images"),
+		),
+		Pull: key.NewBinding(
+			key.WithKeys("p"),
+			key.WithHelp("p", "pull"),
+		),
+		Build: key.NewBinding(
+			key.WithKeys("b"),
+			key.WithHelp("b", "build service"),
+		),
+		BuildAll: key.NewBinding(
+			key.WithKeys("B"),
+			key.WithHelp("B", "build all"),
+		),
+		Bookmark: key.NewBinding(
+			key.WithKeys("*"),
+			key.WithHelp("*", "bookmark"),
+		),
+		Copy: key.NewBinding(
+			key.WithKeys("y"),
+			key.WithHelp("y", "copy"),
+		),
+		CopyFull: key.NewBinding(
+			key.WithKeys("Y"),
+			key.WithHelp("Y", "copy full"),
+		),
 	}
 }
 
@@ -155,6 +195,14 @@ func ApplyKeyBindings(km KeyMap, bindings map[string]string) KeyMap {
 	apply(&km.NetworksKey, "networks")
 	apply(&km.Remove, "remove")
 	apply(&km.Prune, "prune")
+	apply(&km.Exec, "exec")
+	apply(&km.Images, "images")
+	apply(&km.Pull, "pull")
+	apply(&km.Build, "build")
+	apply(&km.BuildAll, "build_all")
+	apply(&km.Bookmark, "bookmark")
+	apply(&km.Copy, "copy")
+	apply(&km.CopyFull, "copy_full")
 	return km
 }
 

@@ -88,7 +88,7 @@ var composeFiles = []string{
 	"docker-compose.yaml",
 }
 
-func findComposeFile(projectPath string) (string, error) {
+func FindComposeFile(projectPath string) (string, error) {
 	for _, name := range composeFiles {
 		p := filepath.Join(projectPath, name)
 		if _, err := os.Stat(p); err == nil {
@@ -99,7 +99,7 @@ func findComposeFile(projectPath string) (string, error) {
 }
 
 func ComposeUp(ctx context.Context, projectPath string) error {
-	composePath, err := findComposeFile(projectPath)
+	composePath, err := FindComposeFile(projectPath)
 	if err != nil {
 		return err
 	}
@@ -117,7 +117,7 @@ func ComposeUp(ctx context.Context, projectPath string) error {
 }
 
 func ComposeDown(ctx context.Context, projectPath string) error {
-	composePath, err := findComposeFile(projectPath)
+	composePath, err := FindComposeFile(projectPath)
 	if err != nil {
 		return err
 	}
@@ -130,6 +130,29 @@ func ComposeDown(ctx context.Context, projectPath string) error {
 			return fmt.Errorf("compose down: %s", stderr.String())
 		}
 		return fmt.Errorf("compose down: %w", err)
+	}
+	return nil
+}
+
+func ComposeBuild(ctx context.Context, projectPath string, service string) error {
+	composePath, err := FindComposeFile(projectPath)
+	if err != nil {
+		return err
+	}
+	args := []string{"compose", "-f", composePath, "build"}
+	if service != "" {
+		args = append(args, service)
+	}
+	var stderr bytes.Buffer
+	cmd := exec.CommandContext(ctx, "docker", args...)
+	cmd.Dir = projectPath
+	cmd.Stderr = &stderr
+	cmd.Stdout = os.Stdout
+	if err := cmd.Run(); err != nil {
+		if stderr.Len() > 0 {
+			return fmt.Errorf("compose build: %s", stderr.String())
+		}
+		return fmt.Errorf("compose build: %w", err)
 	}
 	return nil
 }

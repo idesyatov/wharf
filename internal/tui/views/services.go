@@ -22,6 +22,20 @@ type ActionResultMsg struct {
 
 type SwitchToDetailMsg struct{ Service docker.Service }
 type SwitchToLogsMsg struct{ Container docker.Container }
+type ExecMsg struct {
+	ContainerID string
+	Shell       string
+}
+type ExecDoneMsg struct{ Err error }
+type BuildMsg struct {
+	ProjectPath string
+	ComposePath string
+	Service     string
+}
+type BuildDoneMsg struct {
+	Err     error
+	Service string
+}
 
 type StatsLoadedMsg struct {
 	Stats map[string]docker.Stats
@@ -231,9 +245,34 @@ func (v ServicesView) Update(msg tea.Msg, keys ui.KeyMap) (ServicesView, tea.Cmd
 			return v, func() tea.Msg {
 				return SwitchToVolumesMsg{ProjectName: v.project.Name}
 			}
+		case ui.MatchKey(msg, keys.Exec):
+			if svc, ok := v.selectedService(); ok && len(svc.Containers) > 0 {
+				ct := svc.Containers[0]
+				if ct.Status != "running" {
+					break
+				}
+				return v, func() tea.Msg {
+					return ExecMsg{ContainerID: ct.ID, Shell: ""}
+				}
+			}
 		case ui.MatchKey(msg, keys.NetworksKey):
 			return v, func() tea.Msg {
 				return SwitchToNetworksMsg{ProjectName: v.project.Name}
+			}
+		case ui.MatchKey(msg, keys.Build):
+			if svc, ok := v.selectedService(); ok {
+				return v, func() tea.Msg {
+					return BuildMsg{ProjectPath: v.project.Path, Service: svc.Name}
+				}
+			}
+		case ui.MatchKey(msg, keys.BuildAll):
+			return v, func() tea.Msg {
+				return BuildMsg{ProjectPath: v.project.Path, Service: ""}
+			}
+		case ui.MatchKey(msg, keys.Copy):
+			if svc, ok := v.selectedService(); ok && len(svc.Containers) > 0 {
+				id := svc.Containers[0].ID
+				return v, func() tea.Msg { return CopyMsg{Text: id, Label: id} }
 			}
 		}
 	}
