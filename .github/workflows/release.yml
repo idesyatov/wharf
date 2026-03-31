@@ -24,28 +24,44 @@ jobs:
           CGO_ENABLED: 0
           GOOS: linux
           GOARCH: amd64
-        run: go build -ldflags "-s -w" -o wharf ./cmd/wharf
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          COMMIT=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date -u +%Y-%m-%d)
+          go build -ldflags "-s -w -X github.com/idesyatov/wharf/internal/version.Version=$VERSION -X github.com/idesyatov/wharf/internal/version.Commit=$COMMIT -X github.com/idesyatov/wharf/internal/version.BuildDate=$BUILD_DATE" -o wharf ./cmd/wharf
 
       - name: Build macOS amd64
         env:
           CGO_ENABLED: 0
           GOOS: darwin
           GOARCH: amd64
-        run: go build -ldflags "-s -w" -o wharf-darwin-amd64 ./cmd/wharf
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          COMMIT=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date -u +%Y-%m-%d)
+          go build -ldflags "-s -w -X github.com/idesyatov/wharf/internal/version.Version=$VERSION -X github.com/idesyatov/wharf/internal/version.Commit=$COMMIT -X github.com/idesyatov/wharf/internal/version.BuildDate=$BUILD_DATE" -o wharf-darwin-amd64 ./cmd/wharf
 
       - name: Build macOS arm64
         env:
           CGO_ENABLED: 0
           GOOS: darwin
           GOARCH: arm64
-        run: go build -ldflags "-s -w" -o wharf-darwin-arm64 ./cmd/wharf
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          COMMIT=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date -u +%Y-%m-%d)
+          go build -ldflags "-s -w -X github.com/idesyatov/wharf/internal/version.Version=$VERSION -X github.com/idesyatov/wharf/internal/version.Commit=$COMMIT -X github.com/idesyatov/wharf/internal/version.BuildDate=$BUILD_DATE" -o wharf-darwin-arm64 ./cmd/wharf
 
       - name: Build Windows
         env:
           CGO_ENABLED: 0
           GOOS: windows
           GOARCH: amd64
-        run: go build -ldflags "-s -w" -o wharf.exe ./cmd/wharf
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          COMMIT=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date -u +%Y-%m-%d)
+          go build -ldflags "-s -w -X github.com/idesyatov/wharf/internal/version.Version=$VERSION -X github.com/idesyatov/wharf/internal/version.Commit=$COMMIT -X github.com/idesyatov/wharf/internal/version.BuildDate=$BUILD_DATE" -o wharf.exe ./cmd/wharf
 
       - name: Package archives
         run: |

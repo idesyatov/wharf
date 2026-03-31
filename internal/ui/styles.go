@@ -38,7 +38,7 @@ var (
 
 	SelectedRowStyle = lipgloss.NewStyle().
 				Bold(true).
-				Background(lipgloss.Color("#333333")).
+				Background(lipgloss.Color("#264F78")).
 				Foreground(lipgloss.Color("#FFFFFF"))
 
 	HeaderRowStyle = lipgloss.NewStyle().

@@ -161,7 +161,7 @@ func (v VolumesView) View() string {
 			vol.Mountpoint,
 		)
 		if i == v.cursor {
-			row = ui.SelectedRowStyle.Width(v.width - 4).Render(row)
+			row = renderSelectedRow(row, v.width-2)
 		}
 		rows = append(rows, row)
 	}

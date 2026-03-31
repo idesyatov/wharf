@@ -413,10 +413,23 @@ func (v ServicesView) View() string {
 	rows = append(rows, title, header)
 
 	for i, svc := range filtered {
-		statusStr := statusText(svc.Status)
 		ports := formatPorts(svc)
 		cpu, mem := v.svcStats(svc)
 
+		if i == v.cursor {
+			plainRow := fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s %s",
+				colName, truncate(svc.Name, colName),
+				colStatus, statusTextPlain(svc.Status),
+				colCPU, cpu,
+				colMem, mem,
+				colImage, truncate(svc.Image, colImage),
+				ports,
+			)
+			rows = append(rows, renderSelectedRow(plainRow, v.width-2))
+			continue
+		}
+
+		statusStr := statusText(svc.Status)
 		row := fmt.Sprintf("%-*s %s %-*s %-*s %-*s %s",
 			colName, truncate(svc.Name, colName),
 			padRight(statusStr, colStatus),
@@ -425,10 +438,6 @@ func (v ServicesView) View() string {
 			colImage, truncate(svc.Image, colImage),
 			ports,
 		)
-
-		if i == v.cursor {
-			row = ui.SelectedRowStyle.Width(v.width - 4).Render(row)
-		}
 
 		rows = append(rows, row)
 	}

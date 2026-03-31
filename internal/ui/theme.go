@@ -36,7 +36,7 @@ var builtinDark = Theme{
 		Muted:      "#808080",
 		Highlight:  "#AFAFD7",
 		Border:     "#444444",
-		SelectedBg: "#333333",
+		SelectedBg: "#264F78",
 		SelectedFg: "#FFFFFF",
 	},
 }
@@ -126,7 +126,7 @@ func ApplyTheme(theme *Theme) {
 	BookmarkStyle = lipgloss.NewStyle().Foreground(ColorWarning)
 	CommandStyle = lipgloss.NewStyle().Foreground(ColorPrimary)
 
-	selBg := lipgloss.Color("#333333")
+	selBg := lipgloss.Color("#264F78")
 	selFg := lipgloss.Color("#FFFFFF")
 	if c.SelectedBg != "" {
 		selBg = lipgloss.Color(c.SelectedBg)

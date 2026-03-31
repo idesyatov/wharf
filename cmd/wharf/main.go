@@ -8,9 +8,15 @@ import (
 	"github.com/idesyatov/wharf/internal/config"
 	"github.com/idesyatov/wharf/internal/tui"
 	"github.com/idesyatov/wharf/internal/ui"
+	"github.com/idesyatov/wharf/internal/version"
 )
 
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
+		fmt.Println("wharf " + version.Full())
+		return
+	}
+
 	if len(os.Args) > 1 && (os.Args[1] == "--config" || os.Args[1] == "-c") {
 		cfg, err := config.Load()
 		if err != nil {

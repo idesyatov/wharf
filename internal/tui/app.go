@@ -15,6 +15,7 @@ import (
 	"github.com/idesyatov/wharf/internal/tui/views"
 	"github.com/idesyatov/wharf/internal/ui"
 	"github.com/idesyatov/wharf/internal/util"
+	"github.com/idesyatov/wharf/internal/version"
 )
 
 type viewState int
@@ -34,6 +35,10 @@ const (
 )
 
 type notificationClearMsg struct{}
+type updateAvailableMsg struct {
+	Version string
+	URL     string
+}
 
 type App struct {
 	state           viewState
@@ -62,6 +67,7 @@ type App struct {
 	notificationErr bool
 	notificationExp time.Time
 	pendingColon    bool
+	updateAvailable string
 }
 
 func NewApp(cfg *config.Config) App {
@@ -90,16 +96,27 @@ func NewApp(cfg *config.Config) App {
 
 func (a App) Init() tea.Cmd {
 	if a.err != nil || a.docker == nil {
-		return nil
+		return checkUpdateCmd()
 	}
 	cmds := []tea.Cmd{
 		views.LoadProjects(a.docker),
 		views.TickCmd(a.cfg.PollInterval),
+		checkUpdateCmd(),
 	}
 	if a.eventsChan != nil {
 		cmds = append(cmds, a.listenEvent())
 	}
 	return tea.Batch(cmds...)
+}
+
+func checkUpdateCmd() tea.Cmd {
+	return func() tea.Msg {
+		newVer, url := version.CheckUpdate()
+		if newVer != "" {
+			return updateAvailableMsg{Version: newVer, URL: url}
+		}
+		return nil
+	}
 }
 
 func (a App) listenEvent() tea.Cmd {
@@ -510,6 +527,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return notificationClearMsg{}
 		})
 
+	case updateAvailableMsg:
+		a.updateAvailable = msg.Version
+		return a, nil
+
 	case notificationClearMsg:
 		if time.Now().After(a.notificationExp) {
 			a.notification = ""
@@ -641,7 +662,13 @@ func (a App) renderInfoBar() string {
 		}
 	}
 
-	right := ui.InfoBarStyle.Render("Docker: ") + dockerStatus + ui.MutedStyle.Render(" "+host)
+	ver := ui.MutedStyle.Render(" " + version.String())
+	update := ""
+	if a.updateAvailable != "" {
+		update = " " + ui.PartialStyle.Render("↑"+a.updateAvailable)
+	}
+
+	right := ui.InfoBarStyle.Render("Docker: ") + dockerStatus + ui.MutedStyle.Render(" "+host) + ver + update
 
 	gap := a.width - lipgloss.Width(logo) - lipgloss.Width(right)
 	if gap < 1 {

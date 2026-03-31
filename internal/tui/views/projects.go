@@ -342,8 +342,24 @@ func (v ProjectsView) View() string {
 			}
 		}
 		svcCount := fmt.Sprintf("%d/%d", running, len(p.Services))
-		statusStr := statusText(p.Status)
 
+		if i == v.cursor {
+			mark := "  "
+			if v.cfg != nil && v.cfg.IsBookmarked(p.Name) {
+				mark = "* "
+			}
+			plainRow := fmt.Sprintf("%s%-*s %-*s %-*s %s",
+				mark,
+				colName, truncate(p.Name, colName),
+				colStatus, statusTextPlain(p.Status),
+				colSvc, svcCount,
+				p.Path,
+			)
+			rows = append(rows, renderSelectedRow(plainRow, v.width-2))
+			continue
+		}
+
+		statusStr := statusText(p.Status)
 		mark := "  "
 		if v.cfg != nil && v.cfg.IsBookmarked(p.Name) {
 			mark = ui.BookmarkStyle.Render("★") + " "
@@ -356,10 +372,6 @@ func (v ProjectsView) View() string {
 			colSvc, svcCount,
 			p.Path,
 		)
-
-		if i == v.cursor {
-			row = ui.SelectedRowStyle.Width(v.width - 4).Render(row)
-		}
 
 		rows = append(rows, row)
 	}
@@ -378,6 +390,26 @@ func statusText(s docker.ServiceStatus) string {
 	default:
 		return string(s)
 	}
+}
+
+func statusTextPlain(s docker.ServiceStatus) string {
+	switch s {
+	case docker.StatusRunning:
+		return "running"
+	case docker.StatusPartial:
+		return "partial"
+	case docker.StatusStopped:
+		return "stopped"
+	default:
+		return string(s)
+	}
+}
+
+func renderSelectedRow(text string, width int) string {
+	for lipgloss.Width(text) < width {
+		text += " "
+	}
+	return ui.SelectedRowStyle.Render(text)
 }
 
 func truncate(s string, max int) string {

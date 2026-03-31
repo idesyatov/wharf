@@ -5,6 +5,13 @@ APP_NAME := wharf
 BUILD_DIR := ./bin
 COMPOSE := docker compose -f docker-compose.dev.yml
 BUILDFLAGS := -buildvcs=false
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_DATE := $(shell date -u +%Y-%m-%d 2>/dev/null || echo "unknown")
+LDFLAGS := -s -w \
+    -X github.com/idesyatov/wharf/internal/version.Version=$(VERSION) \
+    -X github.com/idesyatov/wharf/internal/version.Commit=$(COMMIT) \
+    -X github.com/idesyatov/wharf/internal/version.BuildDate=$(BUILD_DATE)
 
 # Default target
 .PHONY: all build build-all run test vet lint clean \
@@ -21,19 +28,19 @@ all: vet test build-all
 build:
 	@echo "Building for current platform..."
 	@mkdir -p $(BUILD_DIR)
-	@go build -o $(BUILD_DIR)/$(APP_NAME) ./cmd/wharf || { echo "Build failed"; exit 1; }
+	@go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(APP_NAME) ./cmd/wharf || { echo "Build failed"; exit 1; }
 
 # Cross-compile for all platforms
 build-all:
 	@mkdir -p $(BUILD_DIR)
 	@echo "Building for Linux amd64..."
-	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o $(BUILD_DIR)/$(APP_NAME)-linux-amd64 ./cmd/wharf
+	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(APP_NAME)-linux-amd64 ./cmd/wharf
 	@echo "Building for Darwin amd64..."
-	@CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o $(BUILD_DIR)/$(APP_NAME)-darwin-amd64 ./cmd/wharf
+	@CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(APP_NAME)-darwin-amd64 ./cmd/wharf
 	@echo "Building for Darwin arm64..."
-	@CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o $(BUILD_DIR)/$(APP_NAME)-darwin-arm64 ./cmd/wharf
+	@CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(APP_NAME)-darwin-arm64 ./cmd/wharf
 	@echo "Building for Windows amd64..."
-	@CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o $(BUILD_DIR)/$(APP_NAME)-windows-amd64.exe ./cmd/wharf
+	@CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(APP_NAME)-windows-amd64.exe ./cmd/wharf
 	@echo "All binaries built in $(BUILD_DIR)/"
 
 # Run TUI
@@ -70,29 +77,33 @@ docker-build: docker-build-linux
 # Build for Linux amd64
 docker-build-linux:
 	@echo "Building for Linux amd64..."
-	@$(COMPOSE) run --rm -e CGO_ENABLED=0 -e GOOS=linux -e GOARCH=amd64 dev \
-		sh -c "mkdir -p $(BUILD_DIR) && go build $(BUILDFLAGS) -o $(BUILD_DIR)/$(APP_NAME)-linux-amd64 ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 666 $(BUILD_DIR)/*" \
+	@$(COMPOSE) run --rm -e CGO_ENABLED=0 -e GOOS=linux -e GOARCH=amd64 \
+		-e VERSION=$(VERSION) -e COMMIT=$(COMMIT) -e BUILD_DATE=$(BUILD_DATE) dev \
+		sh -c 'mkdir -p $(BUILD_DIR) && go build $(BUILDFLAGS) -ldflags "-s -w -X github.com/idesyatov/wharf/internal/version.Version=$$VERSION -X github.com/idesyatov/wharf/internal/version.Commit=$$COMMIT -X github.com/idesyatov/wharf/internal/version.BuildDate=$$BUILD_DATE" -o $(BUILD_DIR)/$(APP_NAME)-linux-amd64 ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 666 $(BUILD_DIR)/*' \
 		|| { echo "Build failed"; exit 1; }
 
 # Build for macOS amd64 (Intel)
 docker-build-darwin-amd64:
 	@echo "Building for Darwin amd64..."
-	@$(COMPOSE) run --rm -e CGO_ENABLED=0 -e GOOS=darwin -e GOARCH=amd64 dev \
-		sh -c "mkdir -p $(BUILD_DIR) && go build $(BUILDFLAGS) -o $(BUILD_DIR)/$(APP_NAME)-darwin-amd64 ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 666 $(BUILD_DIR)/*" \
+	@$(COMPOSE) run --rm -e CGO_ENABLED=0 -e GOOS=darwin -e GOARCH=amd64 \
+		-e VERSION=$(VERSION) -e COMMIT=$(COMMIT) -e BUILD_DATE=$(BUILD_DATE) dev \
+		sh -c 'mkdir -p $(BUILD_DIR) && go build $(BUILDFLAGS) -ldflags "-s -w -X github.com/idesyatov/wharf/internal/version.Version=$$VERSION -X github.com/idesyatov/wharf/internal/version.Commit=$$COMMIT -X github.com/idesyatov/wharf/internal/version.BuildDate=$$BUILD_DATE" -o $(BUILD_DIR)/$(APP_NAME)-darwin-amd64 ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 666 $(BUILD_DIR)/*' \
 		|| { echo "Build failed"; exit 1; }
 
 # Build for macOS arm64 (Apple Silicon)
 docker-build-darwin-arm64:
 	@echo "Building for Darwin arm64..."
-	@$(COMPOSE) run --rm -e CGO_ENABLED=0 -e GOOS=darwin -e GOARCH=arm64 dev \
-		sh -c "mkdir -p $(BUILD_DIR) && go build $(BUILDFLAGS) -o $(BUILD_DIR)/$(APP_NAME)-darwin-arm64 ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 666 $(BUILD_DIR)/*" \
+	@$(COMPOSE) run --rm -e CGO_ENABLED=0 -e GOOS=darwin -e GOARCH=arm64 \
+		-e VERSION=$(VERSION) -e COMMIT=$(COMMIT) -e BUILD_DATE=$(BUILD_DATE) dev \
+		sh -c 'mkdir -p $(BUILD_DIR) && go build $(BUILDFLAGS) -ldflags "-s -w -X github.com/idesyatov/wharf/internal/version.Version=$$VERSION -X github.com/idesyatov/wharf/internal/version.Commit=$$COMMIT -X github.com/idesyatov/wharf/internal/version.BuildDate=$$BUILD_DATE" -o $(BUILD_DIR)/$(APP_NAME)-darwin-arm64 ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 666 $(BUILD_DIR)/*' \
 		|| { echo "Build failed"; exit 1; }
 
 # Build for Windows amd64
 docker-build-windows:
 	@echo "Building for Windows amd64..."
-	@$(COMPOSE) run --rm -e CGO_ENABLED=0 -e GOOS=windows -e GOARCH=amd64 dev \
-		sh -c "mkdir -p $(BUILD_DIR) && go build $(BUILDFLAGS) -o $(BUILD_DIR)/$(APP_NAME)-windows-amd64.exe ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 666 $(BUILD_DIR)/*" \
+	@$(COMPOSE) run --rm -e CGO_ENABLED=0 -e GOOS=windows -e GOARCH=amd64 \
+		-e VERSION=$(VERSION) -e COMMIT=$(COMMIT) -e BUILD_DATE=$(BUILD_DATE) dev \
+		sh -c 'mkdir -p $(BUILD_DIR) && go build $(BUILDFLAGS) -ldflags "-s -w -X github.com/idesyatov/wharf/internal/version.Version=$$VERSION -X github.com/idesyatov/wharf/internal/version.Commit=$$COMMIT -X github.com/idesyatov/wharf/internal/version.BuildDate=$$BUILD_DATE" -o $(BUILD_DIR)/$(APP_NAME)-windows-amd64.exe ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 666 $(BUILD_DIR)/*' \
 		|| { echo "Build failed"; exit 1; }
 
 # Cross-compile for all platforms
