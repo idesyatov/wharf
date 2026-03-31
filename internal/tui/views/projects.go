@@ -52,6 +52,8 @@ type ProjectsView struct {
 	pendingDownPath string
 	pollInterval    time.Duration
 	cfg             *config.Config
+	sortColumn      int
+	sortReverse     bool
 }
 
 func NewProjectsView(pollInterval time.Duration, cfg *config.Config) ProjectsView {
@@ -91,7 +93,8 @@ func TickCmd(interval time.Duration) tea.Cmd {
 func (v ProjectsView) filtered() []docker.Project {
 	var src []docker.Project
 	if v.filterText == "" {
-		src = v.projects
+		src = make([]docker.Project, len(v.projects))
+		copy(src, v.projects)
 	} else {
 		q := strings.ToLower(v.filterText)
 		for _, p := range v.projects {
@@ -100,21 +103,63 @@ func (v ProjectsView) filtered() []docker.Project {
 			}
 		}
 	}
-	// Sort: bookmarked first, then alphabetical
+	// Sort: bookmarked first
 	if v.cfg != nil && len(v.cfg.Bookmarks) > 0 {
-		sorted := make([]docker.Project, len(src))
-		copy(sorted, src)
-		sort.SliceStable(sorted, func(i, j int) bool {
-			bi := v.cfg.IsBookmarked(sorted[i].Name)
-			bj := v.cfg.IsBookmarked(sorted[j].Name)
+		sort.SliceStable(src, func(i, j int) bool {
+			bi := v.cfg.IsBookmarked(src[i].Name)
+			bj := v.cfg.IsBookmarked(src[j].Name)
 			if bi != bj {
 				return bi
 			}
-			return false // preserve original order within groups
+			return false
 		})
-		return sorted
 	}
+	// Column sort
+	v.applySortProjects(src)
 	return src
+}
+
+func statusOrder(s docker.ServiceStatus) int {
+	switch s {
+	case docker.StatusRunning:
+		return 0
+	case docker.StatusPartial:
+		return 1
+	default:
+		return 2
+	}
+}
+
+func runningCount(p docker.Project) int {
+	n := 0
+	for _, s := range p.Services {
+		if s.Status == docker.StatusRunning {
+			n++
+		}
+	}
+	return n
+}
+
+func (v ProjectsView) applySortProjects(ps []docker.Project) {
+	sort.SliceStable(ps, func(i, j int) bool {
+		var less bool
+		switch v.sortColumn {
+		case 0: // NAME
+			less = ps[i].Name < ps[j].Name
+		case 1: // STATUS
+			less = statusOrder(ps[i].Status) < statusOrder(ps[j].Status)
+		case 2: // SERVICES (running count)
+			less = runningCount(ps[i]) < runningCount(ps[j])
+		case 3: // PATH
+			less = ps[i].Path < ps[j].Path
+		default:
+			less = ps[i].Name < ps[j].Name
+		}
+		if v.sortReverse {
+			return !less
+		}
+		return less
+	})
 }
 
 func (v ProjectsView) Update(msg tea.Msg, keys ui.KeyMap) (ProjectsView, tea.Cmd) {
@@ -209,6 +254,10 @@ func (v ProjectsView) Update(msg tea.Msg, keys ui.KeyMap) (ProjectsView, tea.Cmd
 			}
 		case ui.MatchKey(msg, keys.Images):
 			return v, func() tea.Msg { return SwitchToImagesMsg{} }
+		case ui.MatchKey(msg, keys.Events):
+			return v, func() tea.Msg { return SwitchToEventsMsg{} }
+		case ui.MatchKey(msg, keys.SystemDf):
+			return v, func() tea.Msg { return SwitchToSystemMsg{} }
 		case ui.MatchKey(msg, keys.ComposeUp):
 			if len(filtered) > 0 {
 				p := filtered[v.cursor]
@@ -232,6 +281,14 @@ func (v ProjectsView) Update(msg tea.Msg, keys ui.KeyMap) (ProjectsView, tea.Cmd
 			if len(filtered) > 0 {
 				name := filtered[v.cursor].Name
 				return v, func() tea.Msg { return CopyMsg{Text: name, Label: name} }
+			}
+		case msg.String() >= "1" && msg.String() <= "4":
+			col := int(msg.String()[0]-'0') - 1
+			if v.sortColumn == col {
+				v.sortReverse = !v.sortReverse
+			} else {
+				v.sortColumn = col
+				v.sortReverse = false
 			}
 		}
 	}
@@ -259,8 +316,19 @@ func (v ProjectsView) View() string {
 	colStatus := 12
 	colSvc := 12
 
+	cols := []string{"NAME", "STATUS", "SERVICES", "PATH"}
+	for i := range cols {
+		if i == v.sortColumn {
+			if v.sortReverse {
+				cols[i] += "▼"
+			} else {
+				cols[i] += "▲"
+			}
+		}
+	}
+
 	header := ui.HeaderRowStyle.Render(
-		fmt.Sprintf("%-*s%-*s %-*s %-*s %s", colMark, "", colName, "NAME", colStatus, "STATUS", colSvc, "SERVICES", "PATH"),
+		fmt.Sprintf("%-*s%-*s %-*s %-*s %s", colMark, "", colName, cols[0], colStatus, cols[1], colSvc, cols[2], cols[3]),
 	)
 
 	var rows []string

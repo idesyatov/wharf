@@ -37,6 +37,9 @@ type KeyMap struct {
 	Bookmark    key.Binding
 	Copy        key.Binding
 	CopyFull    key.Binding
+	OpenBrowser key.Binding
+	Events      key.Binding
+	SystemDf    key.Binding
 }
 
 func DefaultKeyMap() KeyMap {
@@ -164,6 +167,18 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("Y"),
 			key.WithHelp("Y", "copy full"),
 		),
+		OpenBrowser: key.NewBinding(
+			key.WithKeys("o"),
+			key.WithHelp("o", "open browser"),
+		),
+		Events: key.NewBinding(
+			key.WithKeys("E"),
+			key.WithHelp("E", "events"),
+		),
+		SystemDf: key.NewBinding(
+			key.WithKeys("D"),
+			key.WithHelp("D", "system"),
+		),
 	}
 }
 
@@ -203,6 +218,9 @@ func ApplyKeyBindings(km KeyMap, bindings map[string]string) KeyMap {
 	apply(&km.Bookmark, "bookmark")
 	apply(&km.Copy, "copy")
 	apply(&km.CopyFull, "copy_full")
+	apply(&km.OpenBrowser, "open_browser")
+	apply(&km.Events, "events")
+	apply(&km.SystemDf, "system")
 	return km
 }
 

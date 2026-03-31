@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/idesyatov/wharf/internal/config"
 	"github.com/idesyatov/wharf/internal/tui"
+	"github.com/idesyatov/wharf/internal/ui"
 )
 
 func main() {
@@ -24,6 +25,17 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Config error: %v\n", err)
 		os.Exit(1)
+	}
+
+	if cfg.DockerHost != "" {
+		os.Setenv("DOCKER_HOST", cfg.DockerHost)
+	}
+
+	theme, themeErr := ui.LoadTheme(cfg.Theme)
+	if themeErr != nil {
+		fmt.Fprintf(os.Stderr, "Theme warning: %v, using default\n", themeErr)
+	} else {
+		ui.ApplyTheme(theme)
 	}
 
 	p := tea.NewProgram(tui.NewApp(cfg), tea.WithAltScreen())

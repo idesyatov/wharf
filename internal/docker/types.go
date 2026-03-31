@@ -73,6 +73,23 @@ type Image struct {
 	Created  time.Time
 }
 
+type Event struct {
+	Time   time.Time
+	Type   string
+	Action string
+	Actor  string
+}
+
+type SystemDf struct {
+	ImagesCount     int
+	ImagesSize      int64
+	ContainersCount int
+	ContainersSize  int64
+	VolumesCount    int
+	VolumesSize     int64
+	BuildCacheSize  int64
+}
+
 type Volume struct {
 	Name       string
 	Driver     string

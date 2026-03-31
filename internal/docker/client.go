@@ -359,6 +359,91 @@ func (c *Client) ListNetworks(ctx context.Context) ([]Network, error) {
 	return networks, nil
 }
 
+func (c *Client) SubscribeEvents(ctx context.Context) (<-chan Event, error) {
+	msgs, errs := c.cli.Events(ctx, types.EventsOptions{})
+	ch := make(chan Event, 64)
+	go func() {
+		defer close(ch)
+		for {
+			select {
+			case msg, ok := <-msgs:
+				if !ok {
+					return
+				}
+				actor := ""
+				if msg.Actor.Attributes != nil {
+					if name, ok := msg.Actor.Attributes["name"]; ok {
+						actor = name
+					} else if img, ok := msg.Actor.Attributes["image"]; ok {
+						actor = img
+					}
+				}
+				if actor == "" {
+					actor = msg.Actor.ID
+					if len(actor) > 12 {
+						actor = actor[:12]
+					}
+				}
+				ch <- Event{
+					Time:   time.Unix(msg.Time, msg.TimeNano),
+					Type:   string(msg.Type),
+					Action: string(msg.Action),
+					Actor:  actor,
+				}
+			case _, ok := <-errs:
+				if !ok {
+					return
+				}
+				return
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return ch, nil
+}
+
+func (c *Client) SystemDiskUsage(ctx context.Context) (SystemDf, error) {
+	du, err := c.cli.DiskUsage(ctx, types.DiskUsageOptions{})
+	if err != nil {
+		return SystemDf{}, fmt.Errorf("disk usage: %w", err)
+	}
+
+	var imagesSize int64
+	for _, img := range du.Images {
+		imagesSize += img.Size
+	}
+
+	var containersSize int64
+	for _, ct := range du.Containers {
+		containersSize += ct.SizeRw
+	}
+
+	var volumesSize int64
+	for _, vol := range du.Volumes {
+		if vol.UsageData.Size > 0 {
+			volumesSize += vol.UsageData.Size
+		}
+	}
+
+	var buildCacheSize int64
+	if du.BuildCache != nil {
+		for _, bc := range du.BuildCache {
+			buildCacheSize += bc.Size
+		}
+	}
+
+	return SystemDf{
+		ImagesCount:     len(du.Images),
+		ImagesSize:      imagesSize,
+		ContainersCount: len(du.Containers),
+		ContainersSize:  containersSize,
+		VolumesCount:    len(du.Volumes),
+		VolumesSize:     volumesSize,
+		BuildCacheSize:  buildCacheSize,
+	}, nil
+}
+
 func (c *Client) DetectShell(ctx context.Context, containerID string) string {
 	execCfg, err := c.cli.ContainerExecCreate(ctx, containerID, types.ExecConfig{
 		Cmd:          []string{"which", "bash"},

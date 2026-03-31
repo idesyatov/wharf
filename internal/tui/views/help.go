@@ -67,6 +67,8 @@ var helpText = strings.TrimSpace(`
 
   Projects view
     i                 View images
+    D                 System disk usage
+    E                 Docker events
 
   Volumes view
     x                 Remove volume (confirm)
@@ -76,9 +78,18 @@ var helpText = strings.TrimSpace(`
     p                 Pull image
     P                 Prune unused images
 
+  System view
+    P                 Prune all unused resources
+
+  Sorting (Projects / Services view)
+    1-6               Sort by column (repeat to reverse)
+
   Logs view
     f                 Toggle follow mode
     j / k             Scroll up/down
+    /                 Search in logs
+    n                 Next match
+    N                 Previous match
 
   Clipboard
     y                 Copy container ID / project name

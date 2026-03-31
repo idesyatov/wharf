@@ -3,6 +3,8 @@ package tui
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"os"
 	"os/exec"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	"github.com/idesyatov/wharf/internal/docker"
 	"github.com/idesyatov/wharf/internal/tui/views"
 	"github.com/idesyatov/wharf/internal/ui"
+	"github.com/idesyatov/wharf/internal/util"
 )
 
 type viewState int
@@ -25,6 +28,8 @@ const (
 	viewVolumes
 	viewNetworks
 	viewImages
+	viewEvents
+	viewSystem
 	viewHelp
 )
 
@@ -41,7 +46,12 @@ type App struct {
 	volumesView     views.VolumesView
 	networksView    views.NetworksView
 	imagesView      views.ImagesView
+	eventsView      views.EventsView
+	systemView      views.SystemView
 	helpView        views.HelpView
+	events          []docker.Event
+	eventsNew       int
+	eventsChan      <-chan docker.Event
 	docker          *docker.Client
 	cfg             *config.Config
 	width           int
@@ -58,6 +68,15 @@ func NewApp(cfg *config.Config) App {
 	client, err := docker.NewClient()
 	keys := ui.DefaultKeyMap()
 	keys = ui.ApplyKeyBindings(keys, cfg.KeyBindings)
+
+	var eventsChan <-chan docker.Event
+	if client != nil {
+		ch, evErr := client.SubscribeEvents(context.Background())
+		if evErr == nil {
+			eventsChan = ch
+		}
+	}
+
 	return App{
 		state:        viewProjects,
 		projectsView: views.NewProjectsView(cfg.PollInterval, cfg),
@@ -65,6 +84,7 @@ func NewApp(cfg *config.Config) App {
 		docker:       client,
 		cfg:          cfg,
 		err:          err,
+		eventsChan:   eventsChan,
 	}
 }
 
@@ -72,10 +92,25 @@ func (a App) Init() tea.Cmd {
 	if a.err != nil || a.docker == nil {
 		return nil
 	}
-	return tea.Batch(
+	cmds := []tea.Cmd{
 		views.LoadProjects(a.docker),
 		views.TickCmd(a.cfg.PollInterval),
-	)
+	}
+	if a.eventsChan != nil {
+		cmds = append(cmds, a.listenEvent())
+	}
+	return tea.Batch(cmds...)
+}
+
+func (a App) listenEvent() tea.Cmd {
+	ch := a.eventsChan
+	return func() tea.Msg {
+		ev, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return views.EventReceivedMsg{Event: ev}
+	}
 }
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -91,6 +126,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.volumesView = a.volumesView.SetSize(msg.Width, msg.Height-6)
 		a.networksView = a.networksView.SetSize(msg.Width, msg.Height-6)
 		a.imagesView = a.imagesView.SetSize(msg.Width, msg.Height-6)
+		a.eventsView = a.eventsView.SetSize(msg.Width, msg.Height-6)
+		a.systemView = a.systemView.SetSize(msg.Width, msg.Height-6)
 		a.helpView = a.helpView.SetSize(msg.Width, msg.Height-6)
 		return a, nil
 
@@ -316,6 +353,79 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return notificationClearMsg{}
 		})
 
+	// --- Events ---
+
+	case views.EventReceivedMsg:
+		a.events = append(a.events, msg.Event)
+		if len(a.events) > 50 {
+			a.events = a.events[len(a.events)-50:]
+		}
+		if a.state != viewEvents {
+			a.eventsNew++
+		}
+		return a, a.listenEvent()
+
+	case views.SwitchToEventsMsg:
+		a.prevState = a.state
+		a.state = viewEvents
+		a.eventsNew = 0
+		a.eventsView = views.NewEventsView(a.events).SetSize(a.width, a.height-6)
+		return a, nil
+
+	case views.SwitchBackFromEventsMsg:
+		a.state = a.prevState
+		return a, nil
+
+	// --- System ---
+
+	case views.SwitchToSystemMsg:
+		a.prevState = a.state
+		a.state = viewSystem
+		a.systemView = views.NewSystemView().SetSize(a.width, a.height-6)
+		return a, views.LoadSystemDf(a.docker)
+
+	case views.SwitchBackFromSystemMsg:
+		a.state = a.prevState
+		return a, nil
+
+	case views.SystemDfLoadedMsg:
+		a.systemView, _ = a.systemView.Update(msg, a.keys)
+		return a, nil
+
+	case views.SystemPruneMsg:
+		a.notification = "pruning all unused resources..."
+		a.notificationErr = false
+		a.notificationExp = time.Now().Add(60 * time.Second)
+		return a, views.SystemPrune()
+
+	case views.SystemPruneDoneMsg:
+		if msg.Err != nil {
+			a.notification = "system prune: " + msg.Err.Error()
+			a.notificationErr = true
+		} else {
+			a.notification = "system prune: OK"
+			a.notificationErr = false
+		}
+		a.notificationExp = time.Now().Add(3 * time.Second)
+		return a, tea.Batch(
+			views.LoadSystemDf(a.docker),
+			tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} }),
+		)
+
+	// --- Browser ---
+
+	case views.OpenBrowserMsg:
+		err := util.OpenBrowser(msg.URL)
+		if err != nil {
+			a.notification = "open: " + err.Error()
+			a.notificationErr = true
+		} else {
+			a.notification = "Opening " + msg.URL
+			a.notificationErr = false
+		}
+		a.notificationExp = time.Now().Add(3 * time.Second)
+		return a, tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+
 	case views.SwitchToHelpMsg:
 		a.prevState = a.state
 		a.state = viewHelp
@@ -479,6 +589,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.networksView, cmd = a.networksView.Update(msg, a.keys)
 	case viewImages:
 		a.imagesView, cmd = a.imagesView.Update(msg, a.keys)
+	case viewEvents:
+		a.eventsView, cmd = a.eventsView.Update(msg, a.keys)
+	case viewSystem:
+		a.systemView, cmd = a.systemView.Update(msg, a.keys)
 	case viewHelp:
 		a.helpView, cmd = a.helpView.Update(msg, a.keys)
 	}
@@ -491,6 +605,8 @@ func (a App) isFilterMode() bool {
 		return a.projectsView.FilterMode()
 	case viewServices:
 		return a.servicesView.FilterMode()
+	case viewLogs:
+		return a.logsView.SearchMode()
 	}
 	return false
 }
@@ -512,7 +628,20 @@ func (a App) renderInfoBar() string {
 	if a.err != nil {
 		dockerStatus = ui.ErrorStyle.Render("●")
 	}
-	right := ui.InfoBarStyle.Render("Docker: ") + dockerStatus
+
+	host := "local"
+	if dh := os.Getenv("DOCKER_HOST"); dh != "" {
+		if u, err := url.Parse(dh); err == nil {
+			host = u.Host
+			if host == "" {
+				host = dh
+			}
+		} else {
+			host = dh
+		}
+	}
+
+	right := ui.InfoBarStyle.Render("Docker: ") + dockerStatus + ui.MutedStyle.Render(" "+host)
 
 	gap := a.width - lipgloss.Width(logo) - lipgloss.Width(right)
 	if gap < 1 {
@@ -542,6 +671,10 @@ func (a App) renderBreadcrumbs() string {
 		crumb = "› " + a.networksView.ProjectName() + " › Networks"
 	case viewImages:
 		crumb = "› Images"
+	case viewEvents:
+		crumb = "› Events"
+	case viewSystem:
+		crumb = "› System"
 	case viewHelp:
 		crumb = "Help"
 	}
@@ -564,6 +697,8 @@ func (a App) renderMenuBar() string {
 	case viewProjects:
 		items = []string{
 			ui.FormatMenuItem("i", "mages"),
+			ui.FormatMenuItem("E", "vents"),
+			ui.FormatMenuItem("D", "isk usage"),
 			ui.FormatMenuItem("u", "p"),
 			ui.FormatMenuItem("d", "own"),
 			ui.FormatMenuItem("*", "mark"),
@@ -605,6 +740,12 @@ func (a App) renderMenuBar() string {
 		items = []string{
 			ui.FormatMenuItem("p", "ull"),
 			ui.FormatMenuItem("P", "rune"),
+		}
+	case viewEvents:
+		items = []string{}
+	case viewSystem:
+		items = []string{
+			ui.FormatMenuItem("P", "rune all"),
 		}
 	}
 
@@ -653,6 +794,10 @@ func (a App) renderContent() string {
 			viewContent = a.networksView.View()
 		case viewImages:
 			viewContent = a.imagesView.View()
+		case viewEvents:
+			viewContent = a.eventsView.View()
+		case viewSystem:
+			viewContent = a.systemView.View()
 		case viewHelp:
 			viewContent = a.helpView.View()
 		}
@@ -692,6 +837,9 @@ func (a App) renderStatusLine() string {
 	if a.state == viewImages && a.imagesView.PendingPrune() {
 		return ui.ErrorStyle.Render("Remove all unused images? [y/N]")
 	}
+	if a.state == viewSystem && a.systemView.PendingPrune() {
+		return ui.ErrorStyle.Render("Prune all unused resources (images, containers, volumes, build cache)? [y/N]")
+	}
 
 	// Filter mode
 	if a.state == viewProjects && a.projectsView.FilterMode() {
@@ -699,6 +847,18 @@ func (a App) renderStatusLine() string {
 	}
 	if a.state == viewServices && a.servicesView.FilterMode() {
 		return ui.FilterInputStyle.Render("/ " + a.servicesView.FilterText() + "█")
+	}
+
+	// Log search mode
+	if a.state == viewLogs && a.logsView.SearchMode() {
+		return ui.FilterInputStyle.Render("/ " + a.logsView.SearchText() + "█")
+	}
+	// Log search active (not in input mode)
+	if a.state == viewLogs {
+		info := a.logsView.SearchInfo()
+		if info != "" {
+			return ui.MutedStyle.Render("/" + a.logsView.SearchText() + "  " + info)
+		}
 	}
 
 	return ""

@@ -3,6 +3,7 @@ package views
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -20,6 +21,7 @@ type ActionResultMsg struct {
 	ServiceName string
 }
 
+type OpenBrowserMsg struct{ URL string }
 type SwitchToDetailMsg struct{ Service docker.Service }
 type SwitchToLogsMsg struct{ Container docker.Container }
 type ExecMsg struct {
@@ -50,6 +52,8 @@ type ServicesView struct {
 	filterMode      bool
 	filterText      string
 	stats           map[string]docker.Stats
+	sortColumn      int
+	sortReverse     bool
 	pendingDown     bool
 	pendingDownName string
 	pendingDownPath string
@@ -112,17 +116,80 @@ func (v ServicesView) UpdateProject(project docker.Project) ServicesView {
 }
 
 func (v ServicesView) filtered() []docker.Service {
+	var src []docker.Service
 	if v.filterText == "" {
-		return v.project.Services
-	}
-	q := strings.ToLower(v.filterText)
-	var out []docker.Service
-	for _, s := range v.project.Services {
-		if strings.Contains(strings.ToLower(s.Name), q) {
-			out = append(out, s)
+		src = make([]docker.Service, len(v.project.Services))
+		copy(src, v.project.Services)
+	} else {
+		q := strings.ToLower(v.filterText)
+		for _, s := range v.project.Services {
+			if strings.Contains(strings.ToLower(s.Name), q) {
+				src = append(src, s)
+			}
 		}
 	}
-	return out
+	v.applySortServices(src)
+	return src
+}
+
+func (v ServicesView) svcCPU(svc docker.Service) float64 {
+	if v.stats == nil {
+		return -1
+	}
+	total := 0.0
+	found := false
+	for _, ct := range svc.Containers {
+		if s, ok := v.stats[ct.ID]; ok {
+			total += s.CPUPercent
+			found = true
+		}
+	}
+	if !found {
+		return -1
+	}
+	return total
+}
+
+func (v ServicesView) svcMem(svc docker.Service) int64 {
+	if v.stats == nil {
+		return -1
+	}
+	var total uint64
+	found := false
+	for _, ct := range svc.Containers {
+		if s, ok := v.stats[ct.ID]; ok {
+			total += s.MemUsage
+			found = true
+		}
+	}
+	if !found {
+		return -1
+	}
+	return int64(total)
+}
+
+func (v ServicesView) applySortServices(svcs []docker.Service) {
+	sort.SliceStable(svcs, func(i, j int) bool {
+		var less bool
+		switch v.sortColumn {
+		case 0: // SERVICE
+			less = svcs[i].Name < svcs[j].Name
+		case 1: // STATUS
+			less = statusOrder(svcs[i].Status) < statusOrder(svcs[j].Status)
+		case 2: // CPU
+			less = v.svcCPU(svcs[i]) < v.svcCPU(svcs[j])
+		case 3: // MEM
+			less = v.svcMem(svcs[i]) < v.svcMem(svcs[j])
+		case 4: // IMAGE
+			less = svcs[i].Image < svcs[j].Image
+		default:
+			less = svcs[i].Name < svcs[j].Name
+		}
+		if v.sortReverse {
+			return !less
+		}
+		return less
+	})
 }
 
 func (v ServicesView) selectedService() (docker.Service, bool) {
@@ -207,6 +274,8 @@ func (v ServicesView) Update(msg tea.Msg, keys ui.KeyMap) (ServicesView, tea.Cmd
 			return v, nil
 		case ui.MatchKey(msg, keys.Help):
 			return v, func() tea.Msg { return SwitchToHelpMsg{} }
+		case ui.MatchKey(msg, keys.Events):
+			return v, func() tea.Msg { return SwitchToEventsMsg{} }
 		case ui.MatchKey(msg, keys.Left):
 			return v, func() tea.Msg { return SwitchToProjectsMsg{} }
 		case ui.MatchKey(msg, keys.Right):
@@ -274,6 +343,24 @@ func (v ServicesView) Update(msg tea.Msg, keys ui.KeyMap) (ServicesView, tea.Cmd
 				id := svc.Containers[0].ID
 				return v, func() tea.Msg { return CopyMsg{Text: id, Label: id} }
 			}
+		case ui.MatchKey(msg, keys.OpenBrowser):
+			if svc, ok := v.selectedService(); ok {
+				url := firstHTTPPort(svc)
+				if url != "" {
+					return v, func() tea.Msg { return OpenBrowserMsg{URL: url} }
+				}
+				return v, func() tea.Msg {
+					return CopyMsg{Text: "", Label: "No exposed ports"}
+				}
+			}
+		case msg.String() >= "1" && msg.String() <= "6":
+			col := int(msg.String()[0]-'0') - 1
+			if v.sortColumn == col {
+				v.sortReverse = !v.sortReverse
+			} else {
+				v.sortColumn = col
+				v.sortReverse = false
+			}
 		}
 	}
 
@@ -304,11 +391,22 @@ func (v ServicesView) View() string {
 	colMem := 12
 	colImage := 25
 
+	cols := []string{"SERVICE", "STATUS", "CPU", "MEM", "IMAGE", "PORTS"}
+	for i := range cols {
+		if i == v.sortColumn {
+			if v.sortReverse {
+				cols[i] += "▼"
+			} else {
+				cols[i] += "▲"
+			}
+		}
+	}
+
 	header := ui.HeaderRowStyle.Render(
 		fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s %s",
-			colName, "SERVICE", colStatus, "STATUS",
-			colCPU, "CPU", colMem, "MEM",
-			colImage, "IMAGE", "PORTS"),
+			colName, cols[0], colStatus, cols[1],
+			colCPU, cols[2], colMem, cols[3],
+			colImage, cols[4], cols[5]),
 	)
 
 	var rows []string
@@ -383,6 +481,17 @@ func formatMemory(bytes uint64) string {
 	default:
 		return fmt.Sprintf("%dB", bytes)
 	}
+}
+
+func firstHTTPPort(svc docker.Service) string {
+	for _, c := range svc.Containers {
+		for _, p := range c.Ports {
+			if p.HostPort > 0 {
+				return fmt.Sprintf("http://localhost:%d", p.HostPort)
+			}
+		}
+	}
+	return ""
 }
 
 func formatPorts(svc docker.Service) string {

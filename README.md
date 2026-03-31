@@ -10,19 +10,21 @@ A terminal UI for managing Docker Compose stacks. Inspired by [k9s](https://gith
 
 - Browse Docker Compose projects and services
 - Start, stop, restart services with a single keystroke
-- Docker Compose up/down with confirmation
+- Docker Compose up/down/build
 - Exec into containers (shell) directly from TUI
-- Docker Compose build (service or project)
 - Real-time CPU and memory monitoring
-- Stream container logs with follow/pause mode
+- Stream container logs with follow/pause and search
 - Inspect container details — ports, volumes, environment, networks
 - View compose file with syntax highlighting
-- Manage volumes and networks
-- Image management — list, pull, prune
+- Manage volumes, networks, and images
+- Docker System overview with disk usage
+- Live Docker events monitoring
+- Remote Docker host support
 - Bookmark favorite projects (★)
 - Copy container ID to clipboard (OSC 52)
+- Sort tables by any column
 - Vim-style navigation (hjkl, gg/G, /, :q, arrows)
-- Inline search/filter
+- Customizable themes (dark/light/custom)
 - Configurable via `~/.config/wharf/config.yaml`
 - Single binary, zero dependencies
 
@@ -59,78 +61,70 @@ wharf            # start TUI
 wharf --config   # show config path and current settings
 ```
 
-Make sure the Docker daemon is running and accessible.
-
 ## Keybindings
 
 ### Navigation
 | Key | Action |
 |-----|--------|
-| `j` / `k` / `↑` / `↓` | Move cursor up / down |
+| `j` / `k` / `↑` / `↓` | Move up / down |
 | `h` / `←` / `Esc` | Go back |
 | `l` / `→` / `Enter` | Select / drill down |
-| `gg` / `G` | Jump to top / bottom |
+| `gg` / `G` | Top / bottom |
+| `1`–`6` | Sort by column (repeat to reverse) |
 | `/` | Filter / search |
 | `?` | Help |
 | `q` / `:q` | Quit |
 
-### Actions (Services view)
+### Actions
 | Key | Action |
 |-----|--------|
-| `s` | Start service |
-| `S` | Stop service |
-| `r` | Restart service |
-| `e` | Exec into container (shell) |
-| `b` | Build service |
-| `B` | Build all services |
-| `u` | Docker Compose up |
-| `d` | Docker Compose down |
+| `s` / `S` / `r` | Start / Stop / Restart service |
+| `e` | Exec into container |
+| `b` / `B` | Build service / all |
+| `u` / `d` | Compose up / down |
 | `L` | View logs |
+| `o` | Open in browser |
 | `c` | View compose file |
-| `v` | View volumes |
-| `n` | View networks |
+| `v` / `n` | Volumes / Networks |
+| `i` | Images |
+| `E` | Docker events |
+| `D` | System disk usage |
+| `*` | Toggle bookmark |
+| `y` / `Y` | Copy ID / full info |
+| `f` | Toggle log follow |
+| `P` | Prune (context-dependent) |
 
-### Other
+### Logs search
 | Key | Action |
 |-----|--------|
-| `i` | Images (from Projects view) |
-| `*` | Toggle bookmark |
-| `y` | Copy container ID |
-| `f` | Toggle log follow |
-| `x` | Remove volume |
-| `P` | Prune (volumes/images) |
+| `/` | Search in logs |
+| `n` / `N` | Next / previous match |
+| `Esc` | Clear search |
 
 ## Configuration
 
-Wharf looks for config at `~/.config/wharf/config.yaml`:
-
 ```yaml
+# ~/.config/wharf/config.yaml
 poll_interval: 2s
 log_tail: 100
 max_log_lines: 1000
+theme: dark              # dark, light, or custom theme name
+docker_host: ""          # e.g. tcp://192.168.1.10:2375 or ssh://user@host
 bookmarks:
   - my-project
 keybindings:
   quit: "ctrl+q"
 ```
 
+Custom themes: `~/.config/wharf/themes/<name>.yaml`
+
 ## Development
 
-Go is **not** required locally. All commands run inside Docker.
-
 ```bash
-make help            # show all commands
-make docker-run      # run TUI via Docker
-make docker-test     # run tests
-make docker-vet      # go vet
-make docker-build-all  # cross-compile all platforms
-```
-
-If you have Go installed locally:
-
-```bash
-make run             # run TUI
-make build           # build for current platform
+make help                # show all commands
+make docker-build-all    # cross-compile all platforms
+make docker-run          # run TUI via Docker
+make docker-test         # run tests
 ```
 
 ### Testing with example stacks
@@ -138,22 +132,21 @@ make build           # build for current platform
 ```bash
 cd examples/simple-web && docker compose up -d && cd ../..
 cd examples/multi-service && docker compose up -d && cd ../..
-cd examples/with-volumes && docker compose up -d && cd ../..
 ./bin/wharf-linux-amd64
 ```
 
 ### Releasing
 
 ```bash
-make release VERSION=v0.3.0
+make release VERSION=v0.4.0
 ```
 
 ## Tech Stack
 
-- **Go** + [Bubbletea](https://github.com/charmbracelet/bubbletea) (TUI framework)
+- **Go** + [Bubbletea](https://github.com/charmbracelet/bubbletea) (TUI)
 - **Lipgloss** (styling)
 - **Docker SDK** for Go
 
 ## License
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+MIT — see [LICENSE](LICENSE).

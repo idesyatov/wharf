@@ -16,6 +16,7 @@ type Config struct {
 	KeyBindings  map[string]string `yaml:"keybindings"`
 	Bookmarks    []string          `yaml:"bookmarks"`
 	Theme        string            `yaml:"theme"`
+	DockerHost   string            `yaml:"docker_host"`
 }
 
 func Default() *Config {

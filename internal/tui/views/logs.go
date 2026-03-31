@@ -2,6 +2,7 @@ package views
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"strings"
 
@@ -31,6 +32,10 @@ type LogsView struct {
 	height        int
 	pendingG      bool
 	cancel        context.CancelFunc
+	searchMode    bool
+	searchText    string
+	searchHits    []int
+	searchCursor  int
 }
 
 func NewLogsView(ct docker.Container, maxLines int) LogsView {
@@ -50,6 +55,15 @@ func (v LogsView) SetSize(w, h int) LogsView {
 	v.width = w
 	v.height = h
 	return v
+}
+
+func (v LogsView) SearchMode() bool   { return v.searchMode }
+func (v LogsView) SearchText() string  { return v.searchText }
+func (v LogsView) SearchInfo() string {
+	if v.searchText == "" || len(v.searchHits) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%d/%d matches", v.searchCursor+1, len(v.searchHits))
 }
 
 func (v *LogsView) SetCancel(cancel context.CancelFunc) {
@@ -79,14 +93,30 @@ func (v LogsView) Update(msg tea.Msg, keys ui.KeyMap) (LogsView, tea.Cmd) {
 		return v, readNextLine(msg.reader)
 
 	case logLineWithReader:
-		// msg.line may contain multiple lines joined by \n
 		for _, l := range strings.Split(msg.line, "\n") {
 			if l != "" {
 				v.lines = append(v.lines, l)
+				// Update search hits for new lines
+				if v.searchText != "" && strings.Contains(strings.ToLower(l), strings.ToLower(v.searchText)) {
+					v.searchHits = append(v.searchHits, len(v.lines)-1)
+				}
 			}
 		}
 		if v.maxLines > 0 && len(v.lines) > v.maxLines {
-			v.lines = v.lines[len(v.lines)-v.maxLines:]
+			excess := len(v.lines) - v.maxLines
+			v.lines = v.lines[excess:]
+			// Adjust search hit indices
+			adjusted := v.searchHits[:0]
+			for _, idx := range v.searchHits {
+				newIdx := idx - excess
+				if newIdx >= 0 {
+					adjusted = append(adjusted, newIdx)
+				}
+			}
+			v.searchHits = adjusted
+			if v.searchCursor >= len(v.searchHits) && len(v.searchHits) > 0 {
+				v.searchCursor = len(v.searchHits) - 1
+			}
 		}
 		if v.follow {
 			v.offset = 0
@@ -102,6 +132,29 @@ func (v LogsView) Update(msg tea.Msg, keys ui.KeyMap) (LogsView, tea.Cmd) {
 		return v, nil
 
 	case tea.KeyMsg:
+		// Search input mode
+		if v.searchMode {
+			switch msg.Type {
+			case tea.KeyEnter:
+				v.searchMode = false
+				v.applySearch()
+			case tea.KeyEsc:
+				v.searchMode = false
+				v.searchText = ""
+				v.searchHits = nil
+				v.searchCursor = 0
+			case tea.KeyBackspace:
+				if len(v.searchText) > 0 {
+					v.searchText = v.searchText[:len(v.searchText)-1]
+				}
+			default:
+				if msg.Type == tea.KeyRunes {
+					v.searchText += string(msg.Runes)
+				}
+			}
+			return v, nil
+		}
+
 		if v.pendingG {
 			v.pendingG = false
 			if msg.String() == "g" {
@@ -136,6 +189,14 @@ func (v LogsView) Update(msg tea.Msg, keys ui.KeyMap) (LogsView, tea.Cmd) {
 			if v.follow {
 				v.offset = 0
 			}
+		case ui.MatchKey(msg, keys.Search):
+			v.searchMode = true
+			v.searchText = ""
+			v.follow = false
+		case msg.String() == "n":
+			v.nextSearchHit()
+		case msg.String() == "N":
+			v.prevSearchHit()
 		case ui.MatchKey(msg, keys.Left):
 			v.Close()
 			return v, func() tea.Msg { return SwitchBackFromLogsMsg{} }
@@ -174,10 +235,78 @@ func (v LogsView) View() string {
 	if len(v.lines) == 0 {
 		content = ui.MutedStyle.Render("Waiting for logs...")
 	} else {
-		content = strings.Join(v.lines[start:end], "\n")
+		var rendered []string
+		for i := start; i < end; i++ {
+			line := v.lines[i]
+			if v.searchText != "" && v.isSearchHit(i) {
+				line = ui.SearchHighlightStyle.Render(line)
+			}
+			rendered = append(rendered, line)
+		}
+		content = strings.Join(rendered, "\n")
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, title, content)
+}
+
+func (v *LogsView) applySearch() {
+	v.searchHits = nil
+	v.searchCursor = 0
+	if v.searchText == "" {
+		return
+	}
+	q := strings.ToLower(v.searchText)
+	for i, line := range v.lines {
+		if strings.Contains(strings.ToLower(line), q) {
+			v.searchHits = append(v.searchHits, i)
+		}
+	}
+	if len(v.searchHits) > 0 {
+		v.scrollToHit()
+	}
+}
+
+func (v *LogsView) nextSearchHit() {
+	if len(v.searchHits) == 0 {
+		return
+	}
+	v.searchCursor = (v.searchCursor + 1) % len(v.searchHits)
+	v.scrollToHit()
+}
+
+func (v *LogsView) prevSearchHit() {
+	if len(v.searchHits) == 0 {
+		return
+	}
+	v.searchCursor--
+	if v.searchCursor < 0 {
+		v.searchCursor = len(v.searchHits) - 1
+	}
+	v.scrollToHit()
+}
+
+func (v *LogsView) scrollToHit() {
+	if len(v.searchHits) == 0 {
+		return
+	}
+	hitLine := v.searchHits[v.searchCursor]
+	v.offset = len(v.lines) - hitLine - v.visibleHeight()/2
+	if v.offset < 0 {
+		v.offset = 0
+	}
+	if v.offset > len(v.lines)-v.visibleHeight() {
+		v.offset = len(v.lines) - v.visibleHeight()
+	}
+	v.follow = false
+}
+
+func (v LogsView) isSearchHit(lineIndex int) bool {
+	for _, idx := range v.searchHits {
+		if idx == lineIndex {
+			return true
+		}
+	}
+	return false
 }
 
 func readNextLine(reader io.ReadCloser) tea.Cmd {
