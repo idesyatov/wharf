@@ -2,24 +2,56 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
+	"text/template"
 	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
+// CustomCommand defines a user-configured command that can be run from Services View.
+type CustomCommand struct {
+	Name    string `yaml:"name"`
+	Key     string `yaml:"key"`
+	Command string `yaml:"command"`
+}
+
+// CommandVars holds template variables available in custom command strings.
+type CommandVars struct {
+	ContainerID   string
+	ContainerName string
+	Image         string
+	ProjectName   string
+	ProjectPath   string
+}
+
+// Render substitutes template variables in the command string.
+func (cc CustomCommand) Render(vars CommandVars) (string, error) {
+	tmpl, err := template.New("cmd").Parse(cc.Command)
+	if err != nil {
+		return "", err
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, vars); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
+
 // Config holds all application settings loaded from config.yaml.
 type Config struct {
-	PollInterval time.Duration     `yaml:"poll_interval"`
-	LogTail      int               `yaml:"log_tail"`
-	MaxLogLines  int               `yaml:"max_log_lines"`
-	KeyBindings  map[string]string `yaml:"keybindings"`
-	Bookmarks    []string          `yaml:"bookmarks"`
-	Theme        string            `yaml:"theme"`
-	DockerHost   string            `yaml:"docker_host"`
-	Mouse        bool              `yaml:"mouse"`
+	PollInterval   time.Duration     `yaml:"poll_interval"`
+	LogTail        int               `yaml:"log_tail"`
+	MaxLogLines    int               `yaml:"max_log_lines"`
+	KeyBindings    map[string]string `yaml:"keybindings"`
+	Bookmarks      []string          `yaml:"bookmarks"`
+	Theme          string            `yaml:"theme"`
+	DockerHost     string            `yaml:"docker_host"`
+	Mouse          bool              `yaml:"mouse"`
+	CustomCommands []CustomCommand   `yaml:"custom_commands"`
 }
 
 // Default returns a Config with default values.

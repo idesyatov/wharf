@@ -289,6 +289,13 @@ func (v ProjectsView) Update(msg tea.Msg, keys ui.KeyMap) (ProjectsView, tea.Cmd
 					return SwitchToServicesMsg{Project: p}
 				}
 			}
+		case ui.MatchKey(msg, keys.TopView):
+			if len(filtered) > 0 {
+				p := filtered[v.cursor]
+				return v, func() tea.Msg {
+					return SwitchToTopProjectMsg{Project: p}
+				}
+			}
 		case ui.MatchKey(msg, keys.Images):
 			return v, func() tea.Msg { return SwitchToImagesMsg{} }
 		case ui.MatchKey(msg, keys.Events):

@@ -85,11 +85,13 @@ type VolumeMount struct {
 	Mode        string
 }
 
-// Stats contains CPU and memory usage statistics for a container.
+// Stats contains CPU, memory, and network usage statistics for a container.
 type Stats struct {
 	CPUPercent float64
 	MemUsage   uint64
 	MemLimit   uint64
+	NetRx      uint64
+	NetTx      uint64
 }
 
 // Image represents a Docker image.

@@ -54,6 +54,7 @@ var helpText = strings.TrimSpace(`
     G                 Jump to bottom
 
   Actions (Services view)
+    t                 Resource monitor (top) for container
     s                 Start service
     S                 Stop service
     r                 Restart service
@@ -70,6 +71,7 @@ var helpText = strings.TrimSpace(`
     n                 View networks
 
   Projects view
+    t                 Resource monitor (top) for project
     i                 View images
     D                 System disk usage
     E                 Docker events
@@ -117,6 +119,9 @@ var helpText = strings.TrimSpace(`
     :save [path]      Save logs (in Logs view)
     :edit             Edit compose file (Compose view)
     :help             Show this help
+
+  Custom Commands (from config)
+    1-9               Run custom command (see ~/.config/wharf/config.yaml)
 
   General
     *                 Toggle bookmark (Projects view)

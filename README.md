@@ -60,14 +60,6 @@ tar xzf wharf-v*.tar.gz
 | macOS Apple Silicon | `wharf-vX.X.X-darwin-arm64.tar.gz` |
 | Windows amd64 | `wharf-vX.X.X-windows-amd64.zip` |
 
-### Docker
-
-```bash
-docker run -it --rm \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  ghcr.io/idesyatov/wharf
-```
-
 ### From source
 
 ```bash

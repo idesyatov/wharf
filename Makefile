@@ -142,15 +142,6 @@ docker-deps:
 docker-shell:
 	@$(COMPOSE) run --rm dev sh
 
-# Build Docker image (production)
-docker-image:
-	@echo "Building Docker image..."
-	@docker build -t ghcr.io/idesyatov/wharf:latest \
-		--build-arg VERSION=$(VERSION) \
-		--build-arg COMMIT=$(COMMIT) \
-		--build-arg BUILD_DATE=$(BUILD_DATE) \
-		. || { echo "Docker image build failed"; exit 1; }
-
 # Integration tests (requires Docker)
 docker-test-integration:
 	@echo "Running integration tests..."
@@ -206,7 +197,6 @@ help:
 	@echo "  make docker-lint                - Run golangci-lint"
 	@echo "  make docker-deps                - Update dependencies (go mod tidy)"
 	@echo "  make docker-shell               - Open shell in dev container"
-	@echo "  make docker-image               - Build production Docker image"
 	@echo "  make docker-test-integration    - Run integration tests"
 	@echo "  make docker-clean               - Remove binaries and Docker volumes"
 	@echo ""

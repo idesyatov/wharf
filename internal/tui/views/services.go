@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/idesyatov/wharf/internal/config"
 	"github.com/idesyatov/wharf/internal/docker"
 	"github.com/idesyatov/wharf/internal/ui"
 )
@@ -49,6 +50,15 @@ type HealthLoadedMsg struct {
 	Health map[string]string
 }
 
+type CustomCommandMsg struct {
+	Command string
+	Name    string
+}
+type CustomCommandDoneMsg struct {
+	Err  error
+	Name string
+}
+
 type ServicesView struct {
 	project         docker.Project
 	cursor          int
@@ -64,13 +74,17 @@ type ServicesView struct {
 	pendingDown     bool
 	pendingDownName string
 	pendingDownPath string
+	customCommands  []config.CustomCommand
 }
 
-func NewServicesView(project docker.Project) ServicesView {
+func NewServicesView(project docker.Project, customCommands []config.CustomCommand) ServicesView {
 	return ServicesView{
-		project: project,
+		project:        project,
+		customCommands: customCommands,
 	}
 }
+
+func (v ServicesView) CustomCommands() []config.CustomCommand { return v.customCommands }
 
 func (v ServicesView) SetSize(w, h int) ServicesView {
 	v.width = w
@@ -339,6 +353,17 @@ func (v ServicesView) Update(msg tea.Msg, keys ui.KeyMap) (ServicesView, tea.Cmd
 			return v, nil
 		case ui.MatchKey(msg, keys.Help):
 			return v, func() tea.Msg { return SwitchToHelpMsg{} }
+		case ui.MatchKey(msg, keys.TopView):
+			if svc, ok := v.selectedService(); ok && len(svc.Containers) > 0 {
+				ct := svc.Containers[0]
+				return v, func() tea.Msg {
+					return SwitchToTopContainerMsg{
+						ContainerID:   ct.ID,
+						ContainerName: ct.Name,
+						Image:         svc.Image,
+					}
+				}
+			}
 		case ui.MatchKey(msg, keys.Events):
 			return v, func() tea.Msg { return SwitchToEventsMsg{} }
 		case ui.MatchKey(msg, keys.Left):
@@ -404,18 +429,59 @@ func (v ServicesView) Update(msg tea.Msg, keys ui.KeyMap) (ServicesView, tea.Cmd
 			return v, func() tea.Msg {
 				return SwitchToEnvMsg{ProjectName: v.project.Name, ProjectPath: v.project.Path}
 			}
-		case msg.String() >= "1" && msg.String() <= "7":
-			col := int(msg.String()[0]-'0') - 1
-			if v.sortColumn == col {
-				v.sortReverse = !v.sortReverse
-			} else {
-				v.sortColumn = col
-				v.sortReverse = false
+		default:
+			if k := msg.String(); len(k) == 1 && k >= "1" && k <= "9" {
+				// Custom commands take priority over column sorting
+				if cmd := v.matchCustomCommand(k, filtered); cmd != nil {
+					return v, cmd
+				}
+				// Column sorting for 1-7
+				if k <= "7" {
+					col := int(k[0]-'0') - 1
+					if v.sortColumn == col {
+						v.sortReverse = !v.sortReverse
+					} else {
+						v.sortColumn = col
+						v.sortReverse = false
+					}
+				}
 			}
 		}
 	}
 
 	return v, nil
+}
+
+func (v ServicesView) matchCustomCommand(key string, filtered []docker.Service) tea.Cmd {
+	for _, cc := range v.customCommands {
+		if cc.Key != key {
+			continue
+		}
+		if v.cursor >= len(filtered) {
+			return nil
+		}
+		svc := filtered[v.cursor]
+		if len(svc.Containers) == 0 {
+			return nil
+		}
+		ct := svc.Containers[0]
+		vars := config.CommandVars{
+			ContainerID:   ct.ID,
+			ContainerName: ct.Name,
+			Image:         svc.Image,
+			ProjectName:   v.project.Name,
+			ProjectPath:   v.project.Path,
+		}
+		rendered, err := cc.Render(vars)
+		if err != nil {
+			return nil
+		}
+		name := cc.Name
+		return func() tea.Msg {
+			return CustomCommandMsg{Command: rendered, Name: name}
+		}
+	}
+	return nil
 }
 
 func (v ServicesView) View() string {

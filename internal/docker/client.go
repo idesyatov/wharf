@@ -136,6 +136,10 @@ func (c *Client) ContainerStats(ctx context.Context, id string) (Stats, error) {
 			Limit uint64            `json:"limit"`
 			Stats map[string]uint64 `json:"stats"`
 		} `json:"memory_stats"`
+		Networks map[string]struct {
+			RxBytes uint64 `json:"rx_bytes"`
+			TxBytes uint64 `json:"tx_bytes"`
+		} `json:"networks"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
@@ -154,10 +158,18 @@ func (c *Client) ContainerStats(ctx context.Context, id string) (Stats, error) {
 		memUsage -= cache
 	}
 
+	var netRx, netTx uint64
+	for _, n := range v.Networks {
+		netRx += n.RxBytes
+		netTx += n.TxBytes
+	}
+
 	return Stats{
 		CPUPercent: cpuPercent,
 		MemUsage:   memUsage,
 		MemLimit:   v.MemoryStats.Limit,
+		NetRx:      netRx,
+		NetTx:      netTx,
 	}, nil
 }
 

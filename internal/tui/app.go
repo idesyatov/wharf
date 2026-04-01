@@ -35,6 +35,7 @@ const (
 	viewSystem
 	viewEnv
 	viewHelp
+	viewTop
 )
 
 type notificationClearMsg struct{}
@@ -58,6 +59,7 @@ type App struct {
 	systemView      views.SystemView
 	envFileView     views.EnvFileView
 	helpView        views.HelpView
+	topView         views.TopView
 	events          []docker.Event
 	eventsNew       int
 	eventsChan      <-chan docker.Event
@@ -151,13 +153,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.systemView = a.systemView.SetSize(msg.Width, msg.Height-7)
 		a.envFileView = a.envFileView.SetSize(msg.Width, msg.Height-7)
 		a.helpView = a.helpView.SetSize(msg.Width, msg.Height-7)
+		a.topView = a.topView.SetSize(msg.Width, msg.Height-7)
 		return a, nil
 
 	// --- View switching ---
 
 	case views.SwitchToServicesMsg:
 		a.state = viewServices
-		a.servicesView = views.NewServicesView(msg.Project).SetSize(a.width, a.height-5)
+		a.servicesView = views.NewServicesView(msg.Project, a.cfg.CustomCommands).SetSize(a.width, a.height-5)
 		return a, nil
 
 	case views.SwitchToProjectsMsg:
@@ -509,6 +512,26 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.state = a.prevState
 		return a, nil
 
+	case views.SwitchToTopProjectMsg:
+		a.prevState = a.state
+		a.state = viewTop
+		a.topView = views.NewTopViewProject(msg.Project).SetSize(a.width, a.height-7)
+		return a, views.LoadTopStats(a.docker, msg.Project)
+
+	case views.SwitchToTopContainerMsg:
+		a.prevState = a.state
+		a.state = viewTop
+		a.topView = views.NewTopViewContainer(msg.ContainerID, msg.ContainerName, msg.Image).SetSize(a.width, a.height-7)
+		return a, views.LoadTopContainerStats(a.docker, msg.ContainerID)
+
+	case views.SwitchBackFromTopMsg:
+		a.state = a.prevState
+		return a, nil
+
+	case views.TopStatsLoadedMsg:
+		a.topView = a.topView.UpdateStats(msg.Stats)
+		return a, nil
+
 	case views.SwitchToHelpMsg:
 		a.prevState = a.state
 		a.state = viewHelp
@@ -546,6 +569,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.state == viewServices {
 			cmds = append(cmds, views.LoadStats(a.docker, a.servicesView.Project()))
 			cmds = append(cmds, views.LoadHealth(a.docker, a.servicesView.Project()))
+		}
+		if a.state == viewTop {
+			if a.topView.IsProjectMode() {
+				cmds = append(cmds, views.LoadTopStats(a.docker, a.topView.Project()))
+			} else {
+				cmds = append(cmds, views.LoadTopContainerStats(a.docker, a.topView.ContainerID()))
+			}
 		}
 		return a, tea.Batch(cmds...)
 
@@ -617,6 +647,25 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.notification = ""
 		}
 		return a, nil
+
+	// --- Custom commands ---
+
+	case views.CustomCommandMsg:
+		c := exec.Command("sh", "-c", msg.Command)
+		return a, tea.ExecProcess(c, func(err error) tea.Msg {
+			return views.CustomCommandDoneMsg{Err: err, Name: msg.Name}
+		})
+
+	case views.CustomCommandDoneMsg:
+		if msg.Err != nil {
+			a.notification = msg.Name + ": " + msg.Err.Error()
+			a.notificationErr = true
+		} else {
+			a.notification = msg.Name + ": done"
+			a.notificationErr = false
+		}
+		a.notificationExp = time.Now().Add(2 * time.Second)
+		return a, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
 
 	// --- Exec ---
 
@@ -715,6 +764,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.envFileView, cmd = a.envFileView.Update(msg, a.keys)
 	case viewHelp:
 		a.helpView, cmd = a.helpView.Update(msg, a.keys)
+	case viewTop:
+		a.topView, cmd = a.topView.Update(msg, a.keys)
 	}
 	return a, cmd
 }
@@ -805,6 +856,8 @@ func (a App) renderBreadcrumbs() string {
 		crumb = a.envFileView.Breadcrumb()
 	case viewHelp:
 		crumb = a.helpView.Breadcrumb()
+	case viewTop:
+		crumb = a.topView.Breadcrumb()
 	}
 
 	style := lipgloss.NewStyle().
@@ -847,6 +900,7 @@ func (a App) renderMenuBar() string {
 				ui.FormatMenuItem("R", " compose restart"),
 			)
 			toolsLine = joinMenuItems(
+				ui.FormatMenuItem("t", "op"),
 				ui.FormatMenuItem("i", "mages"),
 				ui.FormatMenuItem("E", "vents"),
 				ui.FormatMenuItem("D", "isk usage"),
@@ -863,14 +917,19 @@ func (a App) renderMenuBar() string {
 			ui.FormatMenuItem("e", "xec"),
 			ui.FormatMenuItem("L", "ogs"),
 		)
-		toolsLine = joinMenuItems(
+		toolsItems := []string{
+			ui.FormatMenuItem("t", "op"),
 			ui.FormatMenuItem("b", "uild"),
 			ui.FormatMenuItem("c", "ompose"),
 			ui.FormatMenuItem("v", "ol"),
 			ui.FormatMenuItem("n", "et"),
 			ui.FormatMenuItem("/", "filter"),
 			ui.FormatMenuItem("?", "help"),
-		)
+		}
+		for _, cc := range a.servicesView.CustomCommands() {
+			toolsItems = append(toolsItems, ui.FormatMenuItem(cc.Key, " "+cc.Name))
+		}
+		toolsLine = joinMenuItems(toolsItems...)
 	case viewDetail:
 		actionsLine = joinMenuItems(
 			ui.FormatMenuItem("L", "ogs"),
@@ -902,6 +961,10 @@ func (a App) renderMenuBar() string {
 	case viewSystem:
 		actionsLine = joinMenuItems(
 			ui.FormatMenuItem("P", "rune all"),
+		)
+	case viewTop:
+		actionsLine = joinMenuItems(
+			ui.FormatMenuItem("h", "back"),
 		)
 	}
 
@@ -955,6 +1018,8 @@ func (a App) renderContent() string {
 			viewContent = a.envFileView.View()
 		case viewHelp:
 			viewContent = a.helpView.View()
+		case viewTop:
+			viewContent = a.topView.View()
 		}
 	}
 
