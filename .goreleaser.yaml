@@ -27,11 +27,13 @@ builds:
       - -X github.com/idesyatov/wharf/internal/version.BuildDate={{.Date}}
 
 archives:
-  - format: tar.gz
+  - formats:
+      - tar.gz
     name_template: "{{ .ProjectName }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}"
     format_overrides:
       - goos: windows
-        format: zip
+        formats:
+          - zip
     files:
       - README.md
       - LICENSE
@@ -47,7 +49,7 @@ changelog:
       - "^test:"
       - "^chore:"
 
-brews:
+homebrew_casks:
   - repository:
       owner: idesyatov
       name: homebrew-tap
@@ -55,7 +57,3 @@ brews:
     homepage: https://github.com/idesyatov/wharf
     description: Terminal UI for managing Docker Compose stacks
     license: MIT
-    install: |
-      bin.install "wharf"
-    test: |
-      system "#{bin}/wharf", "--version"
