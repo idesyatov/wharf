@@ -302,10 +302,18 @@ func (v ServicesView) Update(msg tea.Msg, keys ui.KeyMap) (ServicesView, tea.Cmd
 			return v, func() tea.Msg {
 				return ComposeUpMsg{ProjectPath: v.project.Path, ProjectName: v.project.Name}
 			}
+		case ui.MatchKey(msg, keys.ComposeStop):
+			return v, func() tea.Msg {
+				return ComposeStopMsg{ProjectPath: v.project.Path, ProjectName: v.project.Name}
+			}
 		case ui.MatchKey(msg, keys.ComposeDown):
 			v.pendingDown = true
 			v.pendingDownName = v.project.Name
 			v.pendingDownPath = v.project.Path
+		case ui.MatchKey(msg, keys.ComposeRestart):
+			return v, func() tea.Msg {
+				return ComposeRestartMsg{ProjectPath: v.project.Path, ProjectName: v.project.Name}
+			}
 		case ui.MatchKey(msg, keys.Compose):
 			return v, func() tea.Msg {
 				return SwitchToComposeMsg{ProjectName: v.project.Name, ProjectPath: v.project.Path}

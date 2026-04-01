@@ -59,8 +59,10 @@ var helpText = strings.TrimSpace(`
     e                 Exec into container (shell)
     b                 Build service
     B                 Build all services
-    u                 Compose up
-    d                 Compose down (confirm)
+    u                 Compose up (start project)
+    d                 Compose stop (stop, keep containers)
+    X                 Compose down (stop and REMOVE containers)
+    R                 Compose restart
     c                 View compose file
     v                 View volumes
     n                 View networks

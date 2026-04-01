@@ -21,8 +21,10 @@ type KeyMap struct {
 	Restart   key.Binding
 	Logs       key.Binding
 	Follow     key.Binding
-	ComposeUp   key.Binding
-	ComposeDown key.Binding
+	ComposeUp      key.Binding
+	ComposeStop    key.Binding
+	ComposeDown    key.Binding
+	ComposeRestart key.Binding
 	Confirm     key.Binding
 	Compose     key.Binding
 	VolumesKey  key.Binding
@@ -107,9 +109,17 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("u"),
 			key.WithHelp("u", "compose up"),
 		),
-		ComposeDown: key.NewBinding(
+		ComposeStop: key.NewBinding(
 			key.WithKeys("d"),
-			key.WithHelp("d", "compose down"),
+			key.WithHelp("d", "compose stop"),
+		),
+		ComposeDown: key.NewBinding(
+			key.WithKeys("X"),
+			key.WithHelp("X", "compose down"),
+		),
+		ComposeRestart: key.NewBinding(
+			key.WithKeys("R"),
+			key.WithHelp("R", "compose restart"),
 		),
 		Confirm: key.NewBinding(
 			key.WithKeys("y"),
@@ -204,7 +214,9 @@ func ApplyKeyBindings(km KeyMap, bindings map[string]string) KeyMap {
 	apply(&km.Logs, "logs")
 	apply(&km.Follow, "follow")
 	apply(&km.ComposeUp, "compose_up")
+	apply(&km.ComposeStop, "compose_stop")
 	apply(&km.ComposeDown, "compose_down")
+	apply(&km.ComposeRestart, "compose_restart")
 	apply(&km.Compose, "compose")
 	apply(&km.VolumesKey, "volumes")
 	apply(&km.NetworksKey, "networks")

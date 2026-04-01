@@ -116,6 +116,24 @@ func ComposeUp(ctx context.Context, projectPath string) error {
 	return nil
 }
 
+func ComposeStop(ctx context.Context, projectPath string) error {
+	composePath, err := FindComposeFile(projectPath)
+	if err != nil {
+		return err
+	}
+	var stderr bytes.Buffer
+	cmd := exec.CommandContext(ctx, "docker", "compose", "-f", composePath, "stop")
+	cmd.Dir = projectPath
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if stderr.Len() > 0 {
+			return fmt.Errorf("compose stop: %s", stderr.String())
+		}
+		return fmt.Errorf("compose stop: %w", err)
+	}
+	return nil
+}
+
 func ComposeDown(ctx context.Context, projectPath string) error {
 	composePath, err := FindComposeFile(projectPath)
 	if err != nil {
@@ -130,6 +148,24 @@ func ComposeDown(ctx context.Context, projectPath string) error {
 			return fmt.Errorf("compose down: %s", stderr.String())
 		}
 		return fmt.Errorf("compose down: %w", err)
+	}
+	return nil
+}
+
+func ComposeRestart(ctx context.Context, projectPath string) error {
+	composePath, err := FindComposeFile(projectPath)
+	if err != nil {
+		return err
+	}
+	var stderr bytes.Buffer
+	cmd := exec.CommandContext(ctx, "docker", "compose", "-f", composePath, "restart")
+	cmd.Dir = projectPath
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if stderr.Len() > 0 {
+			return fmt.Errorf("compose restart: %s", stderr.String())
+		}
+		return fmt.Errorf("compose restart: %w", err)
 	}
 	return nil
 }

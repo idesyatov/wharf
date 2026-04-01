@@ -79,7 +79,7 @@ docker-build-linux:
 	@echo "Building for Linux amd64..."
 	@$(COMPOSE) run --rm -e CGO_ENABLED=0 -e GOOS=linux -e GOARCH=amd64 \
 		-e VERSION=$(VERSION) -e COMMIT=$(COMMIT) -e BUILD_DATE=$(BUILD_DATE) dev \
-		sh -c 'mkdir -p $(BUILD_DIR) && go build $(BUILDFLAGS) -ldflags "-s -w -X github.com/idesyatov/wharf/internal/version.Version=$$VERSION -X github.com/idesyatov/wharf/internal/version.Commit=$$COMMIT -X github.com/idesyatov/wharf/internal/version.BuildDate=$$BUILD_DATE" -o $(BUILD_DIR)/$(APP_NAME)-linux-amd64 ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 666 $(BUILD_DIR)/*' \
+		sh -c 'mkdir -p $(BUILD_DIR) && go build $(BUILDFLAGS) -ldflags "-s -w -X github.com/idesyatov/wharf/internal/version.Version=$$VERSION -X github.com/idesyatov/wharf/internal/version.Commit=$$COMMIT -X github.com/idesyatov/wharf/internal/version.BuildDate=$$BUILD_DATE" -o $(BUILD_DIR)/$(APP_NAME)-linux-amd64 ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 755 $(BUILD_DIR)/*' \
 		|| { echo "Build failed"; exit 1; }
 
 # Build for macOS amd64 (Intel)
@@ -87,7 +87,7 @@ docker-build-darwin-amd64:
 	@echo "Building for Darwin amd64..."
 	@$(COMPOSE) run --rm -e CGO_ENABLED=0 -e GOOS=darwin -e GOARCH=amd64 \
 		-e VERSION=$(VERSION) -e COMMIT=$(COMMIT) -e BUILD_DATE=$(BUILD_DATE) dev \
-		sh -c 'mkdir -p $(BUILD_DIR) && go build $(BUILDFLAGS) -ldflags "-s -w -X github.com/idesyatov/wharf/internal/version.Version=$$VERSION -X github.com/idesyatov/wharf/internal/version.Commit=$$COMMIT -X github.com/idesyatov/wharf/internal/version.BuildDate=$$BUILD_DATE" -o $(BUILD_DIR)/$(APP_NAME)-darwin-amd64 ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 666 $(BUILD_DIR)/*' \
+		sh -c 'mkdir -p $(BUILD_DIR) && go build $(BUILDFLAGS) -ldflags "-s -w -X github.com/idesyatov/wharf/internal/version.Version=$$VERSION -X github.com/idesyatov/wharf/internal/version.Commit=$$COMMIT -X github.com/idesyatov/wharf/internal/version.BuildDate=$$BUILD_DATE" -o $(BUILD_DIR)/$(APP_NAME)-darwin-amd64 ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 755 $(BUILD_DIR)/*' \
 		|| { echo "Build failed"; exit 1; }
 
 # Build for macOS arm64 (Apple Silicon)
@@ -95,7 +95,7 @@ docker-build-darwin-arm64:
 	@echo "Building for Darwin arm64..."
 	@$(COMPOSE) run --rm -e CGO_ENABLED=0 -e GOOS=darwin -e GOARCH=arm64 \
 		-e VERSION=$(VERSION) -e COMMIT=$(COMMIT) -e BUILD_DATE=$(BUILD_DATE) dev \
-		sh -c 'mkdir -p $(BUILD_DIR) && go build $(BUILDFLAGS) -ldflags "-s -w -X github.com/idesyatov/wharf/internal/version.Version=$$VERSION -X github.com/idesyatov/wharf/internal/version.Commit=$$COMMIT -X github.com/idesyatov/wharf/internal/version.BuildDate=$$BUILD_DATE" -o $(BUILD_DIR)/$(APP_NAME)-darwin-arm64 ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 666 $(BUILD_DIR)/*' \
+		sh -c 'mkdir -p $(BUILD_DIR) && go build $(BUILDFLAGS) -ldflags "-s -w -X github.com/idesyatov/wharf/internal/version.Version=$$VERSION -X github.com/idesyatov/wharf/internal/version.Commit=$$COMMIT -X github.com/idesyatov/wharf/internal/version.BuildDate=$$BUILD_DATE" -o $(BUILD_DIR)/$(APP_NAME)-darwin-arm64 ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 755 $(BUILD_DIR)/*' \
 		|| { echo "Build failed"; exit 1; }
 
 # Build for Windows amd64
@@ -103,7 +103,7 @@ docker-build-windows:
 	@echo "Building for Windows amd64..."
 	@$(COMPOSE) run --rm -e CGO_ENABLED=0 -e GOOS=windows -e GOARCH=amd64 \
 		-e VERSION=$(VERSION) -e COMMIT=$(COMMIT) -e BUILD_DATE=$(BUILD_DATE) dev \
-		sh -c 'mkdir -p $(BUILD_DIR) && go build $(BUILDFLAGS) -ldflags "-s -w -X github.com/idesyatov/wharf/internal/version.Version=$$VERSION -X github.com/idesyatov/wharf/internal/version.Commit=$$COMMIT -X github.com/idesyatov/wharf/internal/version.BuildDate=$$BUILD_DATE" -o $(BUILD_DIR)/$(APP_NAME)-windows-amd64.exe ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 666 $(BUILD_DIR)/*' \
+		sh -c 'mkdir -p $(BUILD_DIR) && go build $(BUILDFLAGS) -ldflags "-s -w -X github.com/idesyatov/wharf/internal/version.Version=$$VERSION -X github.com/idesyatov/wharf/internal/version.Commit=$$COMMIT -X github.com/idesyatov/wharf/internal/version.BuildDate=$$BUILD_DATE" -o $(BUILD_DIR)/$(APP_NAME)-windows-amd64.exe ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 755 $(BUILD_DIR)/*' \
 		|| { echo "Build failed"; exit 1; }
 
 # Cross-compile for all platforms

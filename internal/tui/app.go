@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -135,24 +136,24 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
 		a.height = msg.Height
-		a.projectsView = a.projectsView.SetSize(msg.Width, msg.Height-6)
-		a.servicesView = a.servicesView.SetSize(msg.Width, msg.Height-6)
-		a.detailView = a.detailView.SetSize(msg.Width, msg.Height-6)
-		a.logsView = a.logsView.SetSize(msg.Width, msg.Height-6)
-		a.composeView = a.composeView.SetSize(msg.Width, msg.Height-6)
-		a.volumesView = a.volumesView.SetSize(msg.Width, msg.Height-6)
-		a.networksView = a.networksView.SetSize(msg.Width, msg.Height-6)
-		a.imagesView = a.imagesView.SetSize(msg.Width, msg.Height-6)
-		a.eventsView = a.eventsView.SetSize(msg.Width, msg.Height-6)
-		a.systemView = a.systemView.SetSize(msg.Width, msg.Height-6)
-		a.helpView = a.helpView.SetSize(msg.Width, msg.Height-6)
+		a.projectsView = a.projectsView.SetSize(msg.Width, msg.Height-7)
+		a.servicesView = a.servicesView.SetSize(msg.Width, msg.Height-7)
+		a.detailView = a.detailView.SetSize(msg.Width, msg.Height-7)
+		a.logsView = a.logsView.SetSize(msg.Width, msg.Height-7)
+		a.composeView = a.composeView.SetSize(msg.Width, msg.Height-7)
+		a.volumesView = a.volumesView.SetSize(msg.Width, msg.Height-7)
+		a.networksView = a.networksView.SetSize(msg.Width, msg.Height-7)
+		a.imagesView = a.imagesView.SetSize(msg.Width, msg.Height-7)
+		a.eventsView = a.eventsView.SetSize(msg.Width, msg.Height-7)
+		a.systemView = a.systemView.SetSize(msg.Width, msg.Height-7)
+		a.helpView = a.helpView.SetSize(msg.Width, msg.Height-7)
 		return a, nil
 
 	// --- View switching ---
 
 	case views.SwitchToServicesMsg:
 		a.state = viewServices
-		a.servicesView = views.NewServicesView(msg.Project).SetSize(a.width, a.height-4)
+		a.servicesView = views.NewServicesView(msg.Project).SetSize(a.width, a.height-5)
 		return a, nil
 
 	case views.SwitchToProjectsMsg:
@@ -162,7 +163,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case views.SwitchToDetailMsg:
 		a.prevState = a.state
 		a.state = viewDetail
-		a.detailView = views.NewDetailView(msg.Service).SetSize(a.width, a.height-4)
+		a.detailView = views.NewDetailView(msg.Service).SetSize(a.width, a.height-5)
 		return a, views.LoadContainerDetail(a.docker, msg.Service)
 
 	case views.SwitchBackFromDetailMsg:
@@ -172,7 +173,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case views.SwitchToLogsMsg:
 		a.prevState = a.state
 		a.state = viewLogs
-		a.logsView = views.NewLogsView(msg.Container, a.cfg.MaxLogLines).SetSize(a.width, a.height-4)
+		a.logsView = views.NewLogsView(msg.Container, a.cfg.MaxLogLines).SetSize(a.width, a.height-5)
 		return a, views.StartLogStream(a.docker, msg.Container.ID, a.cfg.LogTail)
 
 	case views.SwitchBackFromLogsMsg:
@@ -186,7 +187,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case views.SwitchToComposeMsg:
 		a.prevState = a.state
 		a.state = viewCompose
-		a.composeView = views.NewComposeView(msg.ProjectName, msg.ProjectPath).SetSize(a.width, a.height-4)
+		a.composeView = views.NewComposeView(msg.ProjectName, msg.ProjectPath).SetSize(a.width, a.height-5)
 		return a, nil
 
 	case views.SwitchBackFromComposeMsg:
@@ -196,7 +197,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case views.SwitchToVolumesMsg:
 		a.prevState = a.state
 		a.state = viewVolumes
-		a.volumesView = views.NewVolumesView(msg.ProjectName).SetSize(a.width, a.height-4)
+		a.volumesView = views.NewVolumesView(msg.ProjectName).SetSize(a.width, a.height-5)
 		return a, views.LoadVolumes(a.docker, msg.ProjectName)
 
 	case views.SwitchBackFromVolumesMsg:
@@ -244,7 +245,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case views.SwitchToNetworksMsg:
 		a.prevState = a.state
 		a.state = viewNetworks
-		a.networksView = views.NewNetworksView(msg.ProjectName).SetSize(a.width, a.height-4)
+		a.networksView = views.NewNetworksView(msg.ProjectName).SetSize(a.width, a.height-5)
 		return a, views.LoadNetworks(a.docker, msg.ProjectName)
 
 	case views.SwitchBackFromNetworksMsg:
@@ -280,7 +281,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case views.SwitchToImagesMsg:
 		a.prevState = a.state
 		a.state = viewImages
-		a.imagesView = views.NewImagesView().SetSize(a.width, a.height-4)
+		a.imagesView = views.NewImagesView().SetSize(a.width, a.height-5)
 		return a, views.LoadImages(a.docker)
 
 	case views.SwitchBackFromImagesMsg:
@@ -446,7 +447,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case views.SwitchToHelpMsg:
 		a.prevState = a.state
 		a.state = viewHelp
-		a.helpView = views.NewHelpView().SetSize(a.width, a.height-4)
+		a.helpView = views.NewHelpView().SetSize(a.width, a.height-5)
 		return a, nil
 
 	case views.SwitchBackFromHelpMsg:
@@ -490,8 +491,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case views.ComposeUpMsg:
 		return a, a.executeCompose("up", msg.ProjectName, msg.ProjectPath)
+	case views.ComposeStopMsg:
+		return a, a.executeCompose("stop", msg.ProjectName, msg.ProjectPath)
 	case views.ComposeDownMsg:
 		return a, a.executeCompose("down", msg.ProjectName, msg.ProjectPath)
+	case views.ComposeRestartMsg:
+		return a, a.executeCompose("restart", msg.ProjectName, msg.ProjectPath)
 	case views.ComposeResultMsg:
 		if msg.Err != nil {
 			a.notification = "compose " + msg.Action + " " + msg.ProjectName + ": " + msg.Err.Error()
@@ -717,71 +722,81 @@ func (a App) renderBreadcrumbs() string {
 	return style.Render(crumb)
 }
 
+func joinMenuItems(items ...string) string {
+	return strings.Join(items, "  ")
+}
+
 func (a App) renderMenuBar() string {
-	var items []string
+	var actionsLine, toolsLine string
 
 	switch a.state {
 	case viewProjects:
-		items = []string{
+		actionsLine = joinMenuItems(
+			ui.FormatMenuItem("u", " compose up"),
+			ui.FormatMenuItem("d", " compose stop"),
+			ui.FormatMenuItem("X", " compose down"),
+			ui.FormatMenuItem("R", " compose restart"),
+		)
+		toolsLine = joinMenuItems(
 			ui.FormatMenuItem("i", "mages"),
 			ui.FormatMenuItem("E", "vents"),
 			ui.FormatMenuItem("D", "isk usage"),
-			ui.FormatMenuItem("u", "p"),
-			ui.FormatMenuItem("d", "own"),
 			ui.FormatMenuItem("*", "mark"),
 			ui.FormatMenuItem("/", "filter"),
 			ui.FormatMenuItem("?", "help"),
-		}
+		)
 	case viewServices:
-		items = []string{
+		actionsLine = joinMenuItems(
 			ui.FormatMenuItem("s", "tart"),
 			ui.FormatMenuItem("S", "top"),
 			ui.FormatMenuItem("r", "estart"),
 			ui.FormatMenuItem("e", "xec"),
+			ui.FormatMenuItem("u", " compose up"),
+			ui.FormatMenuItem("d", " compose stop"),
+			ui.FormatMenuItem("X", " compose down"),
+			ui.FormatMenuItem("R", " compose restart"),
+		)
+		toolsLine = joinMenuItems(
 			ui.FormatMenuItem("b", "uild"),
-			ui.FormatMenuItem("u", "p"),
-			ui.FormatMenuItem("d", "own"),
 			ui.FormatMenuItem("L", "ogs"),
 			ui.FormatMenuItem("c", "ompose"),
 			ui.FormatMenuItem("v", "ol"),
 			ui.FormatMenuItem("n", "et"),
+			ui.FormatMenuItem("o", "pen"),
 			ui.FormatMenuItem("/", "filter"),
-		}
+		)
 	case viewDetail:
-		items = []string{
+		actionsLine = joinMenuItems(
 			ui.FormatMenuItem("L", "ogs"),
 			ui.FormatMenuItem("e", "xec"),
 			ui.FormatMenuItem("y", "copy"),
 			ui.FormatMenuItem("Y", "copy+"),
-		}
+		)
 	case viewLogs:
-		items = []string{
+		actionsLine = joinMenuItems(
 			ui.FormatMenuItem("f", "ollow"),
-		}
+		)
 	case viewVolumes:
-		items = []string{
+		actionsLine = joinMenuItems(
 			ui.FormatMenuItem("x", "remove"),
 			ui.FormatMenuItem("P", "rune"),
-		}
+		)
 	case viewImages:
-		items = []string{
+		actionsLine = joinMenuItems(
 			ui.FormatMenuItem("p", "ull"),
 			ui.FormatMenuItem("P", "rune"),
-		}
+		)
 	case viewEvents:
-		items = []string{}
+		actionsLine = ""
 	case viewSystem:
-		items = []string{
+		actionsLine = joinMenuItems(
 			ui.FormatMenuItem("P", "rune all"),
-		}
+		)
 	}
 
-	joined := ""
-	for i, item := range items {
-		if i > 0 {
-			joined += "  "
-		}
-		joined += item
+	content := actionsLine
+	if toolsLine != "" {
+		content = actionsLine + "\n" + toolsLine
 	}
 
 	style := lipgloss.NewStyle().
@@ -791,11 +806,11 @@ func (a App) renderMenuBar() string {
 		Width(a.width).
 		Padding(0, 1)
 
-	return style.Render(joined)
+	return style.Render(content)
 }
 
 func (a App) renderContent() string {
-	contentHeight := a.height - 6 // info 1 + breadcrumbs 2 (border) + menu 2 (border) + status 1
+	contentHeight := a.height - 7 // info 1 + breadcrumbs 2 (border) + menu 3 (border + 2 lines) + status 1
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
@@ -850,10 +865,10 @@ func (a App) renderStatusLine() string {
 
 	// Confirmation dialogs
 	if a.state == viewProjects && a.projectsView.PendingDown() {
-		return ui.ErrorStyle.Render("Down project \"" + a.projectsView.PendingDownName() + "\"? [y/N]")
+		return ui.ErrorStyle.Render("Down (REMOVE containers) \"" + a.projectsView.PendingDownName() + "\"? [y/N]")
 	}
 	if a.state == viewServices && a.servicesView.PendingDown() {
-		return ui.ErrorStyle.Render("Down project \"" + a.servicesView.PendingDownName() + "\"? [y/N]")
+		return ui.ErrorStyle.Render("Down (REMOVE containers) \"" + a.servicesView.PendingDownName() + "\"? [y/N]")
 	}
 	if a.state == viewVolumes && a.volumesView.PendingRemove() {
 		return ui.ErrorStyle.Render("Remove volume \"" + a.volumesView.PendingVolName() + "\"? [y/N]")
@@ -918,8 +933,12 @@ func (a App) executeCompose(action, projectName, projectPath string) tea.Cmd {
 		switch action {
 		case "up":
 			err = docker.ComposeUp(ctx, projectPath)
+		case "stop":
+			err = docker.ComposeStop(ctx, projectPath)
 		case "down":
 			err = docker.ComposeDown(ctx, projectPath)
+		case "restart":
+			err = docker.ComposeRestart(ctx, projectPath)
 		}
 		return views.ComposeResultMsg{
 			Err:         err,

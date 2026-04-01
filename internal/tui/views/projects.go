@@ -28,7 +28,15 @@ type ComposeUpMsg struct {
 	ProjectPath string
 	ProjectName string
 }
+type ComposeStopMsg struct {
+	ProjectPath string
+	ProjectName string
+}
 type ComposeDownMsg struct {
+	ProjectPath string
+	ProjectName string
+}
+type ComposeRestartMsg struct {
 	ProjectPath string
 	ProjectName string
 }
@@ -265,12 +273,26 @@ func (v ProjectsView) Update(msg tea.Msg, keys ui.KeyMap) (ProjectsView, tea.Cmd
 					return ComposeUpMsg{ProjectPath: p.Path, ProjectName: p.Name}
 				}
 			}
+		case ui.MatchKey(msg, keys.ComposeStop):
+			if len(filtered) > 0 {
+				p := filtered[v.cursor]
+				return v, func() tea.Msg {
+					return ComposeStopMsg{ProjectPath: p.Path, ProjectName: p.Name}
+				}
+			}
 		case ui.MatchKey(msg, keys.ComposeDown):
 			if len(filtered) > 0 {
 				p := filtered[v.cursor]
 				v.pendingDown = true
 				v.pendingDownName = p.Name
 				v.pendingDownPath = p.Path
+			}
+		case ui.MatchKey(msg, keys.ComposeRestart):
+			if len(filtered) > 0 {
+				p := filtered[v.cursor]
+				return v, func() tea.Msg {
+					return ComposeRestartMsg{ProjectPath: p.Path, ProjectName: p.Name}
+				}
 			}
 		case ui.MatchKey(msg, keys.Bookmark):
 			if len(filtered) > 0 {
