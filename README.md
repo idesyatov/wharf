@@ -68,12 +68,12 @@ docker run -it --rm \
   ghcr.io/idesyatov/wharf
 ```
 
-### From source (requires Docker)
+### From source
 
 ```bash
 git clone https://github.com/idesyatov/wharf.git
 cd wharf
-make docker-build-all
+make docker-build-all    # Go not required — builds via Docker
 ```
 
 ## Usage
@@ -86,54 +86,53 @@ wharf --config   # show config path and current settings
 
 ## Keybindings
 
-### Navigation
-| Key | Action |
-|-----|--------|
-| `j` / `k` / `↑` / `↓` | Move up / down |
-| `h` / `←` / `Esc` | Go back |
-| `l` / `→` / `Enter` | Select / drill down |
-| `gg` / `G` | Top / bottom |
-| `1`–`6` | Sort by column (repeat to reverse) |
-| `/` | Filter / search |
-| `?` | Help |
-| `q` / `:q` | Quit |
+| Key | Action | Context |
+|-----|--------|---------|
+| `j`/`k`/`↑`/`↓` | Navigate up/down | All |
+| `h`/`←`/`Esc` | Go back | All |
+| `l`/`→`/`Enter` | Select / drill down | All |
+| `gg` / `G` | Jump to top / bottom | All |
+| `1`–`6` | Sort by column | Tables |
+| `/` | Filter / search | Projects, Services, Logs |
+| `?` | Help | All |
+| `q` / `:q` | Quit | All |
+| | | |
+| `s` / `S` / `r` | Start / Stop / Restart service | Services |
+| `e` | Exec into container | Services, Detail |
+| `L` | View logs | Services, Detail |
+| `u` | Compose up | Projects |
+| `d` | Compose stop | Projects |
+| `X` | Compose down (removes containers) | Projects |
+| `R` | Compose restart | Projects |
+| `b` / `B` | Build service / all | Services |
+| | | |
+| `c` | Compose file preview | Services |
+| `v` / `n` | Volumes / Networks | Services |
+| `i` | Images | Projects |
+| `E` | Docker events | Projects |
+| `D` | System disk usage | Projects |
+| `*` | Toggle bookmark | Projects |
+| `y` / `Y` | Copy ID / full info | Services, Detail |
+| `f` | Toggle log follow | Logs |
+| `n` / `N` | Next / prev search match | Logs |
+| `P` | Prune | Volumes, Images, System |
+| `Space` | Toggle select (bulk) | Projects |
 
-### Service actions
-| Key | Action |
-|-----|--------|
-| `s` | Start service |
-| `S` | Stop service |
-| `r` | Restart service |
-| `e` | Exec into container (shell) |
-| `L` | View logs |
+<details>
+<summary>Command Mode</summary>
 
-### Compose actions
-| Key | Action |
-|-----|--------|
-| `u` | Compose up (start project) |
-| `d` | Compose stop (stop, keep containers) |
-| `X` | Compose down (stop and REMOVE containers) |
-| `R` | Compose restart |
-| `b` / `B` | Build service / all |
+Press `:` then type a command, `Enter` to execute:
 
-### Views
-| Key | Action |
-|-----|--------|
-| `c` | View compose file |
-| `v` | Volumes |
-| `n` | Networks |
-| `i` | Images |
-| `E` | Docker events |
-| `D` | System disk usage |
+| Command | Action |
+|---------|--------|
+| `:q` / `:q!` | Quit |
+| `:host` | Show current Docker host |
+| `:theme dark` / `:theme light` | Switch theme |
+| `:version` | Show version info |
+| `:save [path]` | Save logs to file (Logs view) |
+| `:help` | Show help |
 
-### Other
-| Key | Action |
-|-----|--------|
-| `*` | Toggle bookmark |
-| `y` / `Y` | Copy ID / full info |
-| `f` | Toggle log follow |
-| `n` / `N` | Next / previous log search match |
-| `P` | Prune (context-dependent) |
+</details>
 
 ## Configuration
 
@@ -144,6 +143,7 @@ log_tail: 100
 max_log_lines: 1000
 theme: dark              # dark, light, or custom theme name
 docker_host: ""          # e.g. tcp://192.168.1.10:2375 or ssh://user@host
+mouse: false             # enable mouse support
 bookmarks:
   - my-project
 keybindings:
@@ -159,41 +159,19 @@ make help                # show all commands
 make docker-build-all    # cross-compile all platforms
 make docker-run          # run TUI via Docker
 make docker-test         # run tests
+make docker-vet          # go vet
 ```
 
 ### Testing with example stacks
 
 ```bash
-cd examples/simple-web && docker compose up -d && cd ../..
 cd examples/multi-service && docker compose up -d && cd ../..
 ./bin/wharf-linux-amd64
 ```
 
-### Releasing
-
-```bash
-make release VERSION=v0.4.2
-```
-
 ## Tech Stack
 
-- **Go** + [Bubbletea](https://github.com/charmbracelet/bubbletea) (TUI)
-- **Lipgloss** (styling)
-- **Docker SDK** for Go
-
-## Command Mode
-
-Press `:` then type a command, press `Enter` to execute:
-
-| Command | Action |
-|---------|--------|
-| `:q` | Quit (`:q!` also works) |
-| `:host` | Show current Docker host |
-| `:theme dark` | Switch to dark theme |
-| `:theme light` | Switch to light theme |
-| `:version` | Show version info |
-| `:save [path]` | Save logs to file (Logs view) |
-| `:help` | Show help |
+**Go** + [Bubbletea](https://github.com/charmbracelet/bubbletea) + [Lipgloss](https://github.com/charmbracelet/lipgloss) + [Docker SDK](https://pkg.go.dev/github.com/docker/docker/client)
 
 ## Contributing
 

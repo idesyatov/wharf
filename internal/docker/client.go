@@ -470,21 +470,9 @@ func (c *Client) SystemDiskUsage(ctx context.Context) (SystemDf, error) {
 	}, nil
 }
 
-func (c *Client) DetectShell(ctx context.Context, containerID string) string {
-	execCfg, err := c.cli.ContainerExecCreate(ctx, containerID, types.ExecConfig{
-		Cmd:          []string{"which", "bash"},
-		AttachStdout: true,
-	})
-	if err == nil {
-		resp, err := c.cli.ContainerExecAttach(ctx, execCfg.ID, types.ExecStartCheck{})
-		if err == nil {
-			resp.Close()
-			inspect, err := c.cli.ContainerExecInspect(ctx, execCfg.ID)
-			if err == nil && inspect.ExitCode == 0 {
-				return "bash"
-			}
-		}
-	}
+// DetectShell returns the shell to use for exec.
+// Always returns "sh" which is available in virtually all containers.
+func (c *Client) DetectShell(_ context.Context, _ string) string {
 	return "sh"
 }
 
