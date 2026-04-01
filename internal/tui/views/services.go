@@ -25,8 +25,10 @@ type OpenBrowserMsg struct{ URL string }
 type SwitchToDetailMsg struct{ Service docker.Service }
 type SwitchToLogsMsg struct{ Container docker.Container }
 type ExecMsg struct {
-	ContainerID string
-	Shell       string
+	ContainerID   string
+	ContainerName string
+	Image         string
+	Shell         string
 }
 type ExecDoneMsg struct{ Err error }
 type BuildMsg struct {
@@ -198,19 +200,28 @@ func (v ServicesView) svcMem(svc docker.Service) int64 {
 	return int64(total)
 }
 
+func svcContainerName(svc docker.Service) string {
+	if len(svc.Containers) > 0 {
+		return svc.Containers[0].Name
+	}
+	return ""
+}
+
 func (v ServicesView) applySortServices(svcs []docker.Service) {
 	sort.SliceStable(svcs, func(i, j int) bool {
 		var less bool
 		switch v.sortColumn {
 		case 0: // SERVICE
 			less = svcs[i].Name < svcs[j].Name
-		case 1: // STATUS
+		case 1: // CONTAINER
+			less = svcContainerName(svcs[i]) < svcContainerName(svcs[j])
+		case 2: // STATUS
 			less = statusOrder(svcs[i].Status) < statusOrder(svcs[j].Status)
-		case 2: // CPU
+		case 3: // CPU
 			less = v.svcCPU(svcs[i]) < v.svcCPU(svcs[j])
-		case 3: // MEM
+		case 4: // MEM
 			less = v.svcMem(svcs[i]) < v.svcMem(svcs[j])
-		case 4: // IMAGE
+		case 5: // IMAGE
 			less = svcs[i].Image < svcs[j].Image
 		default:
 			less = svcs[i].Name < svcs[j].Name
@@ -367,7 +378,7 @@ func (v ServicesView) Update(msg tea.Msg, keys ui.KeyMap) (ServicesView, tea.Cmd
 					break
 				}
 				return v, func() tea.Msg {
-					return ExecMsg{ContainerID: ct.ID, Shell: ""}
+					return ExecMsg{ContainerID: ct.ID, ContainerName: ct.Name, Image: svc.Image}
 				}
 			}
 		case ui.MatchKey(msg, keys.NetworksKey):
@@ -393,7 +404,7 @@ func (v ServicesView) Update(msg tea.Msg, keys ui.KeyMap) (ServicesView, tea.Cmd
 			return v, func() tea.Msg {
 				return SwitchToEnvMsg{ProjectName: v.project.Name, ProjectPath: v.project.Path}
 			}
-		case msg.String() >= "1" && msg.String() <= "6":
+		case msg.String() >= "1" && msg.String() <= "7":
 			col := int(msg.String()[0]-'0') - 1
 			if v.sortColumn == col {
 				v.sortReverse = !v.sortReverse
@@ -425,14 +436,15 @@ func (v ServicesView) View() string {
 		)
 	}
 
-	colName := 18
+	colName := 14
+	colCont := 25
 	colStatus := 10
 	colHealth := 2
 	colCPU := 8
-	colMem := 12
-	colImage := 25
+	colMem := 10
+	colImage := 20
 
-	cols := []string{"SERVICE", "STATUS", "H", "CPU", "MEM", "IMAGE", "PORTS"}
+	cols := []string{"SERVICE", "CONTAINER", "STATUS", "H", "CPU", "MEM", "IMAGE", "PORTS"}
 	for i := range cols {
 		if i == v.sortColumn {
 			if v.sortReverse {
@@ -444,10 +456,10 @@ func (v ServicesView) View() string {
 	}
 
 	header := ui.HeaderRowStyle.Render(
-		fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s %-*s %s",
-			colName, cols[0], colStatus, cols[1], colHealth, cols[2],
-			colCPU, cols[3], colMem, cols[4],
-			colImage, cols[5], cols[6]),
+		fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s %-*s %-*s %s",
+			colName, cols[0], colCont, cols[1], colStatus, cols[2], colHealth, cols[3],
+			colCPU, cols[4], colMem, cols[5],
+			colImage, cols[6], cols[7]),
 	)
 
 	var rows []string
@@ -456,10 +468,12 @@ func (v ServicesView) View() string {
 	for i, svc := range filtered {
 		ports := formatPorts(svc)
 		cpu, mem := v.svcStats(svc)
+		ctName := svcContainerName(svc)
 
 		if i == v.cursor {
-			plainRow := fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s %-*s %s",
+			plainRow := fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s %-*s %-*s %s",
 				colName, truncate(svc.Name, colName),
+				colCont, truncate(ctName, colCont),
 				colStatus, statusTextPlain(svc.Status),
 				colHealth, svcHealthPlain(v.health, svc),
 				colCPU, cpu,
@@ -473,8 +487,9 @@ func (v ServicesView) View() string {
 
 		statusStr := statusText(svc.Status)
 		healthStr := v.svcHealthIndicator(svc)
-		row := fmt.Sprintf("%-*s %s %s %-*s %-*s %-*s %s",
+		row := fmt.Sprintf("%-*s %-*s %s %s %-*s %-*s %-*s %s",
 			colName, truncate(svc.Name, colName),
+			colCont, truncate(ctName, colCont),
 			padRight(statusStr, colStatus),
 			padRight(healthStr, colHealth),
 			colCPU, cpu,

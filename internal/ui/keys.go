@@ -45,6 +45,7 @@ type KeyMap struct {
 	SystemDf    key.Binding
 	SaveLogs    key.Binding
 	EnvFile     key.Binding
+	Edit        key.Binding
 }
 
 // DefaultKeyMap returns the default keybindings.
@@ -201,6 +202,10 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("."),
 			key.WithHelp(".", "env file"),
 		),
+		Edit: key.NewBinding(
+			key.WithKeys("e"),
+			key.WithHelp("e", "edit"),
+		),
 	}
 }
 
@@ -248,6 +253,7 @@ func ApplyKeyBindings(km KeyMap, bindings map[string]string) KeyMap {
 	apply(&km.SystemDf, "system")
 	apply(&km.SaveLogs, "save_logs")
 	apply(&km.EnvFile, "env_file")
+	apply(&km.Edit, "edit")
 	return km
 }
 

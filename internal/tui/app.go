@@ -198,6 +198,26 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.state = viewServices
 		return a, nil
 
+	case views.EditComposeMsg:
+		editor := util.DetectEditor()
+		c := exec.Command(editor, msg.FilePath)
+		return a, tea.ExecProcess(c, func(err error) tea.Msg {
+			return views.EditComposeDoneMsg{Err: err, FilePath: msg.FilePath}
+		})
+
+	case views.EditComposeDoneMsg:
+		if msg.Err != nil {
+			a.notification = "editor: " + msg.Err.Error()
+			a.notificationErr = true
+			a.notificationExp = time.Now().Add(3 * time.Second)
+			return a, tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+		}
+		a.composeView = views.NewComposeView(a.composeView.ProjectName(), a.composeView.ProjectPath()).SetSize(a.width, a.height-7)
+		a.notification = "Editor closed"
+		a.notificationErr = false
+		a.notificationExp = time.Now().Add(2 * time.Second)
+		return a, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+
 	case views.SwitchToVolumesMsg:
 		a.prevState = a.state
 		a.state = viewVolumes
@@ -605,7 +625,18 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if shell == "" {
 			shell = a.docker.DetectShell(context.Background(), msg.ContainerID)
 		}
-		c := exec.Command("docker", "exec", "-it", msg.ContainerID, shell)
+		banner := fmt.Sprintf(
+			"echo '─────────────────────────────────────────' && "+
+				"echo '  ⚓ Wharf — Container Shell' && "+
+				"echo '  Container: %s' && "+
+				"echo '  Image:     %s' && "+
+				"echo '  Shell:     %s' && "+
+				"echo '  Exit:      type exit or Ctrl+D' && "+
+				"echo '─────────────────────────────────────────' && "+
+				"exec %s",
+			msg.ContainerName, msg.Image, shell, shell,
+		)
+		c := exec.Command("docker", "exec", "-it", msg.ContainerID, "sh", "-c", banner)
 		return a, tea.ExecProcess(c, func(err error) tea.Msg {
 			return views.ExecDoneMsg{Err: err}
 		})
@@ -846,6 +877,10 @@ func (a App) renderMenuBar() string {
 			ui.FormatMenuItem("e", "xec"),
 			ui.FormatMenuItem("y", "copy"),
 			ui.FormatMenuItem("Y", "copy+"),
+		)
+	case viewCompose:
+		actionsLine = joinMenuItems(
+			ui.FormatMenuItem("e", "dit"),
 		)
 	case viewLogs:
 		actionsLine = joinMenuItems(
@@ -1113,6 +1148,19 @@ func (a *App) executeCommand(cmd string) tea.Cmd {
 			return func() tea.Msg { return views.SaveLogsMsg{Path: path} }
 		}
 		a.notification = "save: only available in Logs view"
+		a.notificationErr = true
+		a.notificationExp = time.Now().Add(2 * time.Second)
+		return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+	case "edit":
+		if a.state == viewCompose && a.composeView.FilePath() != "" {
+			editor := util.DetectEditor()
+			fp := a.composeView.FilePath()
+			c := exec.Command(editor, fp)
+			return tea.ExecProcess(c, func(err error) tea.Msg {
+				return views.EditComposeDoneMsg{Err: err, FilePath: fp}
+			})
+		}
+		a.notification = "edit: only available in Compose view"
 		a.notificationErr = true
 		a.notificationExp = time.Now().Add(2 * time.Second)
 		return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })

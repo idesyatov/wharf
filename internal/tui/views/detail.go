@@ -117,7 +117,7 @@ func (v DetailView) Update(msg tea.Msg, keys ui.KeyMap) (DetailView, tea.Cmd) {
 					break
 				}
 				return v, func() tea.Msg {
-					return ExecMsg{ContainerID: ct.ID, Shell: ""}
+					return ExecMsg{ContainerID: ct.ID, ContainerName: ct.Name, Image: ct.Image}
 				}
 			}
 		case ui.MatchKey(msg, keys.Copy):
@@ -182,6 +182,7 @@ func (v DetailView) buildSections() []string {
 
 	lines = append(lines,
 		fmt.Sprintf("  %-14s %s", "Container", d.ID),
+		fmt.Sprintf("  %-14s %s", "Name", d.Name),
 		fmt.Sprintf("  %-14s %s", "Image", d.Image),
 		fmt.Sprintf("  %-14s %s", "Status", detailStatusText(docker.ServiceStatus(d.Status)).render()),
 		fmt.Sprintf("  %-14s %s", "State", d.State),

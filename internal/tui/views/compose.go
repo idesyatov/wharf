@@ -15,6 +15,11 @@ type SwitchToComposeMsg struct {
 	ProjectPath string
 }
 type SwitchBackFromComposeMsg struct{}
+type EditComposeMsg struct{ FilePath string }
+type EditComposeDoneMsg struct {
+	Err      error
+	FilePath string
+}
 
 var composeFileNames = []string{
 	"compose.yaml",
@@ -25,7 +30,9 @@ var composeFileNames = []string{
 
 type ComposeView struct {
 	projectName string
+	projectPath string
 	fileName    string
+	filePath    string
 	lines       []string
 	scroll      int
 	width       int
@@ -35,13 +42,14 @@ type ComposeView struct {
 }
 
 func NewComposeView(projectName, projectPath string) ComposeView {
-	v := ComposeView{projectName: projectName}
+	v := ComposeView{projectName: projectName, projectPath: projectPath}
 
 	for _, name := range composeFileNames {
 		p := filepath.Join(projectPath, name)
 		data, err := os.ReadFile(p)
 		if err == nil {
 			v.fileName = name
+			v.filePath = p
 			v.lines = strings.Split(string(data), "\n")
 			return v
 		}
@@ -61,6 +69,14 @@ func (v ComposeView) FileName() string {
 
 func (v ComposeView) ProjectName() string {
 	return v.projectName
+}
+
+func (v ComposeView) ProjectPath() string {
+	return v.projectPath
+}
+
+func (v ComposeView) FilePath() string {
+	return v.filePath
 }
 
 func (v ComposeView) SetSize(w, h int) ComposeView {
@@ -99,6 +115,11 @@ func (v ComposeView) Update(msg tea.Msg, keys ui.KeyMap) (ComposeView, tea.Cmd) 
 			v.scroll = maxScroll
 		case msg.String() == "g":
 			v.pendingG = true
+		case ui.MatchKey(msg, keys.Edit):
+			if v.filePath != "" {
+				fp := v.filePath
+				return v, func() tea.Msg { return EditComposeMsg{FilePath: fp} }
+			}
 		case ui.MatchKey(msg, keys.Left):
 			return v, func() tea.Msg { return SwitchBackFromComposeMsg{} }
 		}

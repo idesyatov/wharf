@@ -98,6 +98,9 @@ var helpText = strings.TrimSpace(`
     n                 Next match
     N                 Previous match
 
+  Compose view
+    e                 Edit compose file ($EDITOR)
+
   Services view extras
     .                 Preview .env file
 
@@ -112,6 +115,7 @@ var helpText = strings.TrimSpace(`
     :host             Show Docker host
     :version          Show version
     :save [path]      Save logs (in Logs view)
+    :edit             Edit compose file (Compose view)
     :help             Show this help
 
   General
