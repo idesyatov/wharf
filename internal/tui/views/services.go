@@ -574,17 +574,6 @@ func formatMemory(bytes uint64) string {
 	}
 }
 
-func firstHTTPPort(svc docker.Service) string {
-	for _, c := range svc.Containers {
-		for _, p := range c.Ports {
-			if p.HostPort > 0 {
-				return fmt.Sprintf("http://localhost:%d", p.HostPort)
-			}
-		}
-	}
-	return ""
-}
-
 func formatPorts(svc docker.Service) string {
 	seen := make(map[string]bool)
 	var parts []string

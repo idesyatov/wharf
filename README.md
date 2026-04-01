@@ -8,8 +8,9 @@
 
 A terminal UI for managing Docker Compose stacks. Inspired by [k9s](https://github.com/derailed/k9s).
 
-<!-- TODO: generate demo.gif with `vhs demo.tape` or asciinema -->
-<!-- <p align="center"><img src="demo.gif" alt="Wharf Demo" width="800"></p> -->
+<p align="center">
+  <img src="demo.gif" alt="Wharf Demo" width="800">
+</p>
 
 ## Features
 
@@ -104,7 +105,6 @@ wharf --config   # show config path and current settings
 | `S` | Stop service |
 | `r` | Restart service |
 | `e` | Exec into container (shell) |
-| `o` | Open in browser |
 | `L` | View logs |
 
 ### Compose actions
@@ -180,6 +180,24 @@ make release VERSION=v0.4.2
 - **Go** + [Bubbletea](https://github.com/charmbracelet/bubbletea) (TUI)
 - **Lipgloss** (styling)
 - **Docker SDK** for Go
+
+## Command Mode
+
+Press `:` then type a command, press `Enter` to execute:
+
+| Command | Action |
+|---------|--------|
+| `:q` | Quit (`:q!` also works) |
+| `:host` | Show current Docker host |
+| `:theme dark` | Switch to dark theme |
+| `:theme light` | Switch to light theme |
+| `:version` | Show version info |
+| `:save [path]` | Save logs to file (Logs view) |
+| `:help` | Show help |
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## License
 

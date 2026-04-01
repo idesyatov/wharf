@@ -112,6 +112,7 @@ var helpText = strings.TrimSpace(`
     :host             Show Docker host
     :version          Show version
     :save [path]      Save logs (in Logs view)
+    :help             Show this help
 
   General
     *                 Toggle bookmark (Projects view)

@@ -1,3 +1,4 @@
+// Package config handles application configuration loading and saving.
 package config
 
 import (
@@ -9,6 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Config holds all application settings loaded from config.yaml.
 type Config struct {
 	PollInterval time.Duration     `yaml:"poll_interval"`
 	LogTail      int               `yaml:"log_tail"`
@@ -20,6 +22,7 @@ type Config struct {
 	Mouse        bool              `yaml:"mouse"`
 }
 
+// Default returns a Config with default values.
 func Default() *Config {
 	return &Config{
 		PollInterval: 2 * time.Second,
@@ -29,6 +32,8 @@ func Default() *Config {
 	}
 }
 
+// Load reads configuration from ~/.config/wharf/config.yaml.
+// Returns default config if the file does not exist.
 func Load() (*Config, error) {
 	path, err := configPath()
 	if err != nil {
@@ -83,6 +88,7 @@ func (c *Config) ToggleBookmark(name string) {
 	c.Bookmarks = append(c.Bookmarks, name)
 }
 
+// Save writes the current configuration to disk.
 func (c *Config) Save() error {
 	path, err := configPath()
 	if err != nil {
@@ -99,6 +105,7 @@ func (c *Config) Save() error {
 	return os.WriteFile(path, data, 0644)
 }
 
+// Path returns the config file path.
 func Path() string {
 	p, err := configPath()
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Theme defines a color palette for the UI.
 type Theme struct {
 	Colors ThemeColors `yaml:"colors"`
 }
@@ -56,6 +57,7 @@ var builtinLight = Theme{
 	},
 }
 
+// LoadTheme loads a theme by name (dark, light) or from a custom YAML file.
 func LoadTheme(name string) (*Theme, error) {
 	switch name {
 	case "", "auto", "dark":
@@ -82,6 +84,7 @@ func LoadTheme(name string) (*Theme, error) {
 	return &theme, nil
 }
 
+// ApplyTheme applies a theme's colors to all UI styles.
 func ApplyTheme(theme *Theme) {
 	c := theme.Colors
 	if c.Primary != "" {

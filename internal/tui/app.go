@@ -1067,9 +1067,11 @@ func (a *App) executeCommand(cmd string) tea.Cmd {
 	}
 
 	switch parts[0] {
-	case "q":
+	case "q", "q!":
 		a.cleanup()
 		return tea.Quit
+	case "help":
+		return func() tea.Msg { return views.SwitchToHelpMsg{} }
 	case "host":
 		host := "local"
 		if dh := os.Getenv("DOCKER_HOST"); dh != "" {

@@ -37,9 +37,9 @@ func (c *Client) ListProjects(ctx context.Context) ([]Project, error) {
 
 		svcName := ct.Labels[labelService]
 
-		proj, ok := projectMap[projName]
+		_, ok := projectMap[projName]
 		if !ok {
-			proj = &Project{
+			proj := &Project{
 				Name: projName,
 				Path: ct.Labels[labelWorkingDir],
 			}
@@ -88,6 +88,7 @@ var composeFiles = []string{
 	"docker-compose.yaml",
 }
 
+// FindComposeFile searches for a compose file in the given directory.
 func FindComposeFile(projectPath string) (string, error) {
 	for _, name := range composeFiles {
 		p := filepath.Join(projectPath, name)
@@ -98,6 +99,7 @@ func FindComposeFile(projectPath string) (string, error) {
 	return "", fmt.Errorf("no compose file found in %s", projectPath)
 }
 
+// ComposeUp starts a compose project with docker compose up -d.
 func ComposeUp(ctx context.Context, projectPath string) error {
 	composePath, err := FindComposeFile(projectPath)
 	if err != nil {
@@ -116,6 +118,7 @@ func ComposeUp(ctx context.Context, projectPath string) error {
 	return nil
 }
 
+// ComposeStop stops a compose project without removing containers.
 func ComposeStop(ctx context.Context, projectPath string) error {
 	composePath, err := FindComposeFile(projectPath)
 	if err != nil {
@@ -134,6 +137,7 @@ func ComposeStop(ctx context.Context, projectPath string) error {
 	return nil
 }
 
+// ComposeDown stops and removes containers for a compose project.
 func ComposeDown(ctx context.Context, projectPath string) error {
 	composePath, err := FindComposeFile(projectPath)
 	if err != nil {
@@ -152,6 +156,7 @@ func ComposeDown(ctx context.Context, projectPath string) error {
 	return nil
 }
 
+// ComposeRestart restarts all services in a compose project.
 func ComposeRestart(ctx context.Context, projectPath string) error {
 	composePath, err := FindComposeFile(projectPath)
 	if err != nil {
@@ -170,6 +175,7 @@ func ComposeRestart(ctx context.Context, projectPath string) error {
 	return nil
 }
 
+// ComposeBuild builds images for a compose project or a specific service.
 func ComposeBuild(ctx context.Context, projectPath string, service string) error {
 	composePath, err := FindComposeFile(projectPath)
 	if err != nil {

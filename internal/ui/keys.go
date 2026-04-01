@@ -5,6 +5,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// KeyMap defines all keybindings for the application.
 type KeyMap struct {
 	Quit      key.Binding
 	ForceQuit key.Binding
@@ -46,6 +47,7 @@ type KeyMap struct {
 	EnvFile     key.Binding
 }
 
+// DefaultKeyMap returns the default keybindings.
 func DefaultKeyMap() KeyMap {
 	return KeyMap{
 		Quit: key.NewBinding(
@@ -202,6 +204,7 @@ func DefaultKeyMap() KeyMap {
 	}
 }
 
+// ApplyKeyBindings overrides default keybindings with user-configured ones.
 func ApplyKeyBindings(km KeyMap, bindings map[string]string) KeyMap {
 	if len(bindings) == 0 {
 		return km
@@ -248,6 +251,7 @@ func ApplyKeyBindings(km KeyMap, bindings map[string]string) KeyMap {
 	return km
 }
 
+// MatchKey checks if a key message matches a keybinding.
 func MatchKey(msg tea.KeyMsg, binding key.Binding) bool {
 	for _, k := range binding.Keys() {
 		if msg.String() == k {

@@ -1,3 +1,5 @@
+// Package ui provides styles, keybindings, themes, and clipboard
+// utilities for the Wharf TUI.
 package ui
 
 import (
@@ -69,14 +71,14 @@ var (
 	StatusLineStyle  = lipgloss.NewStyle().Foreground(ColorMuted).Padding(0, 1)
 )
 
-// Separator renders a horizontal line
+// Separator renders a horizontal line of the given width.
 func Separator(width int) string {
 	return lipgloss.NewStyle().
 		Foreground(ColorBorder).
 		Render(strings.Repeat("─", width))
 }
 
-// FormatMenuItem formats a menu item: <key>text
+// FormatMenuItem formats a k9s-style menu item: <key>text.
 func FormatMenuItem(key, text string) string {
 	return MenuKeyStyle.Render("<"+key+">") + MenuTextStyle.Render(text)
 }

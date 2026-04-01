@@ -16,10 +16,13 @@ import (
 	"github.com/docker/docker/client"
 )
 
+// Client wraps the Docker SDK client and provides methods
+// for managing containers, images, volumes, and networks.
 type Client struct {
 	cli *client.Client
 }
 
+// NewClient creates a new Docker client using environment configuration.
 func NewClient() (*Client, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
@@ -189,7 +192,7 @@ func (c *Client) InspectContainer(ctx context.Context, id string) (ContainerDeta
 			for _, b := range bindings {
 				var hostPort uint16
 				if b.HostPort != "" {
-					fmt.Sscanf(b.HostPort, "%d", &hostPort)
+					_, _ = fmt.Sscanf(b.HostPort, "%d", &hostPort)
 				}
 				ports = append(ports, Port{
 					HostIP:   b.HostIP,

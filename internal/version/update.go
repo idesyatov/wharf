@@ -14,6 +14,8 @@ type githubRelease struct {
 	HTMLURL string `json:"html_url"`
 }
 
+// CheckUpdate checks GitHub Releases for a newer version.
+// Returns the new version tag and URL, or empty strings if up to date.
 func CheckUpdate() (newVersion, url string) {
 	if Version == "dev" {
 		return "", ""
