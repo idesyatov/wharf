@@ -91,42 +91,47 @@ func (v NetworksView) Update(msg tea.Msg, keys ui.KeyMap) (NetworksView, tea.Cmd
 		return v, nil
 
 	case tea.KeyMsg:
-		if v.pendingG {
-			v.pendingG = false
-			if msg.String() == "g" {
-				v.cursor = 0
-				return v, nil
-			}
-		}
+		return v.handleKeyMsg(msg, keys)
+	}
+	return v, nil
+}
 
-		switch {
-		case ui.MatchKey(msg, keys.Down):
-			if !v.detail && v.cursor < len(v.networks)-1 {
-				v.cursor++
-			}
-		case ui.MatchKey(msg, keys.Up):
-			if !v.detail && v.cursor > 0 {
-				v.cursor--
-			}
-		case ui.MatchKey(msg, keys.Bottom):
-			if !v.detail && len(v.networks) > 0 {
-				v.cursor = len(v.networks) - 1
-			}
-		case msg.String() == "g":
-			if !v.detail {
-				v.pendingG = true
-			}
-		case ui.MatchKey(msg, keys.Right):
-			if !v.detail && len(v.networks) > 0 {
-				v.detail = true
-			}
-		case ui.MatchKey(msg, keys.Left):
-			if v.detail {
-				v.detail = false
-				return v, nil
-			}
-			return v, func() tea.Msg { return SwitchBackFromNetworksMsg{} }
+func (v NetworksView) handleKeyMsg(msg tea.KeyMsg, keys ui.KeyMap) (NetworksView, tea.Cmd) {
+	if v.pendingG {
+		v.pendingG = false
+		if msg.String() == "g" {
+			v.cursor = 0
+			return v, nil
 		}
+	}
+
+	switch {
+	case ui.MatchKey(msg, keys.Down):
+		if !v.detail && v.cursor < len(v.networks)-1 {
+			v.cursor++
+		}
+	case ui.MatchKey(msg, keys.Up):
+		if !v.detail && v.cursor > 0 {
+			v.cursor--
+		}
+	case ui.MatchKey(msg, keys.Bottom):
+		if !v.detail && len(v.networks) > 0 {
+			v.cursor = len(v.networks) - 1
+		}
+	case msg.String() == "g":
+		if !v.detail {
+			v.pendingG = true
+		}
+	case ui.MatchKey(msg, keys.Right):
+		if !v.detail && len(v.networks) > 0 {
+			v.detail = true
+		}
+	case ui.MatchKey(msg, keys.Left):
+		if v.detail {
+			v.detail = false
+			return v, nil
+		}
+		return v, func() tea.Msg { return SwitchBackFromNetworksMsg{} }
 	}
 	return v, nil
 }

@@ -102,56 +102,60 @@ func (v VolumesView) Update(msg tea.Msg, keys ui.KeyMap) (VolumesView, tea.Cmd) 
 		return v, nil
 
 	case tea.KeyMsg:
-		// Confirmation handlers
-		if v.pendingRemove {
-			v.pendingRemove = false
-			if ui.MatchKey(msg, keys.Confirm) {
-				name := v.pendingVolName
-				return v, func() tea.Msg { return RemoveVolumeMsg{Name: name} }
-			}
+		return v.handleKeyMsg(msg, keys)
+	}
+	return v, nil
+}
+
+func (v VolumesView) handleKeyMsg(msg tea.KeyMsg, keys ui.KeyMap) (VolumesView, tea.Cmd) {
+	if v.pendingRemove {
+		v.pendingRemove = false
+		if ui.MatchKey(msg, keys.Confirm) {
+			name := v.pendingVolName
+			return v, func() tea.Msg { return RemoveVolumeMsg{Name: name} }
+		}
+		return v, nil
+	}
+	if v.pendingPrune {
+		v.pendingPrune = false
+		if ui.MatchKey(msg, keys.Confirm) {
+			return v, func() tea.Msg { return PruneVolumesActionMsg{} }
+		}
+		return v, nil
+	}
+
+	if v.pendingG {
+		v.pendingG = false
+		if msg.String() == "g" {
+			v.cursor = 0
 			return v, nil
 		}
-		if v.pendingPrune {
-			v.pendingPrune = false
-			if ui.MatchKey(msg, keys.Confirm) {
-				return v, func() tea.Msg { return PruneVolumesActionMsg{} }
-			}
-			return v, nil
-		}
+	}
 
-		if v.pendingG {
-			v.pendingG = false
-			if msg.String() == "g" {
-				v.cursor = 0
-				return v, nil
-			}
+	switch {
+	case ui.MatchKey(msg, keys.Down):
+		if v.cursor < len(v.volumes)-1 {
+			v.cursor++
 		}
-
-		switch {
-		case ui.MatchKey(msg, keys.Down):
-			if v.cursor < len(v.volumes)-1 {
-				v.cursor++
-			}
-		case ui.MatchKey(msg, keys.Up):
-			if v.cursor > 0 {
-				v.cursor--
-			}
-		case ui.MatchKey(msg, keys.Bottom):
-			if len(v.volumes) > 0 {
-				v.cursor = len(v.volumes) - 1
-			}
-		case msg.String() == "g":
-			v.pendingG = true
-		case ui.MatchKey(msg, keys.Remove):
-			if len(v.volumes) > 0 {
-				v.pendingRemove = true
-				v.pendingVolName = v.volumes[v.cursor].Name
-			}
-		case ui.MatchKey(msg, keys.Prune):
-			v.pendingPrune = true
-		case ui.MatchKey(msg, keys.Left):
-			return v, func() tea.Msg { return SwitchBackFromVolumesMsg{} }
+	case ui.MatchKey(msg, keys.Up):
+		if v.cursor > 0 {
+			v.cursor--
 		}
+	case ui.MatchKey(msg, keys.Bottom):
+		if len(v.volumes) > 0 {
+			v.cursor = len(v.volumes) - 1
+		}
+	case msg.String() == "g":
+		v.pendingG = true
+	case ui.MatchKey(msg, keys.Remove):
+		if len(v.volumes) > 0 {
+			v.pendingRemove = true
+			v.pendingVolName = v.volumes[v.cursor].Name
+		}
+	case ui.MatchKey(msg, keys.Prune):
+		v.pendingPrune = true
+	case ui.MatchKey(msg, keys.Left):
+		return v, func() tea.Msg { return SwitchBackFromVolumesMsg{} }
 	}
 	return v, nil
 }

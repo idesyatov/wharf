@@ -80,10 +80,10 @@ func (v ProjectsView) SetSize(w, h int) ProjectsView {
 	return v
 }
 
-func (v ProjectsView) Breadcrumb() string  { return "" }
-func (v ProjectsView) FilterMode() bool    { return v.filterMode }
-func (v ProjectsView) FilterText() string   { return v.filterText }
-func (v ProjectsView) PendingDown() bool    { return v.pendingDown }
+func (v ProjectsView) Breadcrumb() string      { return "" }
+func (v ProjectsView) FilterMode() bool        { return v.filterMode }
+func (v ProjectsView) FilterText() string      { return v.filterText }
+func (v ProjectsView) PendingDown() bool       { return v.pendingDown }
 func (v ProjectsView) PendingDownName() string { return v.pendingDownName }
 func (v ProjectsView) SelectedCount() int      { return len(v.selected) }
 func (v ProjectsView) HasSelected() bool       { return len(v.selected) > 0 }
@@ -215,169 +215,205 @@ func (v ProjectsView) Update(msg tea.Msg, keys ui.KeyMap) (ProjectsView, tea.Cmd
 		return v, nil
 
 	case tea.KeyMsg:
-		if v.filterMode {
-			switch msg.Type {
-			case tea.KeyEnter:
-				v.filterMode = false
-				v.cursor = 0
-			case tea.KeyEsc:
-				v.filterMode = false
-				v.filterText = ""
-				v.cursor = 0
-			case tea.KeyBackspace:
-				if len(v.filterText) > 0 {
-					v.filterText = v.filterText[:len(v.filterText)-1]
-					v.cursor = 0
-				}
-			default:
-				if msg.Type == tea.KeyRunes {
-					v.filterText += string(msg.Runes)
-					v.cursor = 0
-				}
+		return v.handleKeyMsg(msg, keys)
+	}
+
+	return v, nil
+}
+
+func (v ProjectsView) handleFilterInput(msg tea.KeyMsg) (ProjectsView, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEnter:
+		v.filterMode = false
+		v.cursor = 0
+	case tea.KeyEsc:
+		v.filterMode = false
+		v.filterText = ""
+		v.cursor = 0
+	case tea.KeyBackspace:
+		if len(v.filterText) > 0 {
+			v.filterText = v.filterText[:len(v.filterText)-1]
+			v.cursor = 0
+		}
+	default:
+		if msg.Type == tea.KeyRunes {
+			v.filterText += string(msg.Runes)
+			v.cursor = 0
+		}
+	}
+	return v, nil
+}
+
+func (v ProjectsView) handleKeyMsg(msg tea.KeyMsg, keys ui.KeyMap) (ProjectsView, tea.Cmd) {
+	if v.filterMode {
+		return v.handleFilterInput(msg)
+	}
+
+	if v.pendingDown {
+		v.pendingDown = false
+		if ui.MatchKey(msg, keys.Confirm) {
+			name := v.pendingDownName
+			path := v.pendingDownPath
+			return v, func() tea.Msg {
+				return ComposeDownMsg{ProjectPath: path, ProjectName: name}
 			}
+		}
+		return v, nil
+	}
+
+	if v.pendingG {
+		v.pendingG = false
+		if msg.String() == "g" {
+			v.cursor = 0
 			return v, nil
 		}
+	}
 
-		// Confirmation dialog for compose down
-		if v.pendingDown {
-			v.pendingDown = false
-			if ui.MatchKey(msg, keys.Confirm) {
-				name := v.pendingDownName
-				path := v.pendingDownPath
-				return v, func() tea.Msg {
-					return ComposeDownMsg{ProjectPath: path, ProjectName: name}
-				}
-			}
-			return v, nil
+	filtered := v.filtered()
+	return v.handleNavAndActions(msg, keys, filtered)
+}
+
+func (v ProjectsView) handleNavAndActions(msg tea.KeyMsg, keys ui.KeyMap, filtered []docker.Project) (ProjectsView, tea.Cmd) {
+	switch {
+	case ui.MatchKey(msg, keys.Down):
+		if v.cursor < len(filtered)-1 {
+			v.cursor++
 		}
-
-		if v.pendingG {
-			v.pendingG = false
-			if msg.String() == "g" {
-				v.cursor = 0
-				return v, nil
+	case ui.MatchKey(msg, keys.Up):
+		if v.cursor > 0 {
+			v.cursor--
+		}
+	case ui.MatchKey(msg, keys.Bottom):
+		if len(filtered) > 0 {
+			v.cursor = len(filtered) - 1
+		}
+	case msg.String() == "g":
+		v.pendingG = true
+	case ui.MatchKey(msg, keys.Search):
+		v.filterMode = true
+		v.filterText = ""
+		return v, nil
+	case ui.MatchKey(msg, keys.Help):
+		return v, func() tea.Msg { return SwitchToHelpMsg{} }
+	case ui.MatchKey(msg, keys.Right):
+		if len(filtered) > 0 {
+			p := filtered[v.cursor]
+			return v, func() tea.Msg {
+				return SwitchToServicesMsg{Project: p}
 			}
 		}
+	case ui.MatchKey(msg, keys.TopView):
+		if len(filtered) > 0 {
+			p := filtered[v.cursor]
+			return v, func() tea.Msg {
+				return SwitchToTopProjectMsg{Project: p}
+			}
+		}
+	case ui.MatchKey(msg, keys.Images):
+		return v, func() tea.Msg { return SwitchToImagesMsg{} }
+	case ui.MatchKey(msg, keys.Events):
+		return v, func() tea.Msg { return SwitchToEventsMsg{} }
+	case ui.MatchKey(msg, keys.SystemDf):
+		return v, func() tea.Msg { return SwitchToSystemMsg{} }
+	default:
+		return v.handleProjectActions(msg, keys, filtered)
+	}
+	return v, nil
+}
 
-		filtered := v.filtered()
-
-		switch {
-		case ui.MatchKey(msg, keys.Down):
+func (v ProjectsView) handleProjectActions(msg tea.KeyMsg, keys ui.KeyMap, filtered []docker.Project) (ProjectsView, tea.Cmd) {
+	switch {
+	case msg.String() == " ":
+		if len(filtered) > 0 {
+			if v.selected == nil {
+				v.selected = make(map[int]bool)
+			}
+			if v.selected[v.cursor] {
+				delete(v.selected, v.cursor)
+			} else {
+				v.selected[v.cursor] = true
+			}
 			if v.cursor < len(filtered)-1 {
 				v.cursor++
 			}
-		case ui.MatchKey(msg, keys.Up):
-			if v.cursor > 0 {
-				v.cursor--
+		}
+	default:
+		return v.handleComposeActions(msg, keys, filtered)
+	}
+	return v, nil
+}
+
+func (v ProjectsView) handleComposeActions(msg tea.KeyMsg, keys ui.KeyMap, filtered []docker.Project) (ProjectsView, tea.Cmd) {
+	switch {
+	case ui.MatchKey(msg, keys.ComposeUp):
+		if len(v.selected) > 0 {
+			return v, v.batchAction("up", filtered)
+		}
+		if len(filtered) > 0 {
+			p := filtered[v.cursor]
+			return v, func() tea.Msg {
+				return ComposeUpMsg{ProjectPath: p.Path, ProjectName: p.Name}
 			}
-		case ui.MatchKey(msg, keys.Bottom):
-			if len(filtered) > 0 {
-				v.cursor = len(filtered) - 1
+		}
+	case ui.MatchKey(msg, keys.ComposeStop):
+		if len(v.selected) > 0 {
+			return v, v.batchAction("stop", filtered)
+		}
+		if len(filtered) > 0 {
+			p := filtered[v.cursor]
+			return v, func() tea.Msg {
+				return ComposeStopMsg{ProjectPath: p.Path, ProjectName: p.Name}
 			}
-		case msg.String() == "g":
-			v.pendingG = true
-		case ui.MatchKey(msg, keys.Search):
-			v.filterMode = true
-			v.filterText = ""
-			return v, nil
-		case ui.MatchKey(msg, keys.Help):
-			return v, func() tea.Msg { return SwitchToHelpMsg{} }
-		case ui.MatchKey(msg, keys.Right):
-			if len(filtered) > 0 {
-				p := filtered[v.cursor]
-				return v, func() tea.Msg {
-					return SwitchToServicesMsg{Project: p}
-				}
+		}
+	case ui.MatchKey(msg, keys.ComposeDown):
+		if len(v.selected) > 0 {
+			return v, v.batchAction("down", filtered)
+		}
+		if len(filtered) > 0 {
+			p := filtered[v.cursor]
+			v.pendingDown = true
+			v.pendingDownName = p.Name
+			v.pendingDownPath = p.Path
+		}
+	case ui.MatchKey(msg, keys.ComposeRestart):
+		if len(v.selected) > 0 {
+			return v, v.batchAction("restart", filtered)
+		}
+		if len(filtered) > 0 {
+			p := filtered[v.cursor]
+			return v, func() tea.Msg {
+				return ComposeRestartMsg{ProjectPath: p.Path, ProjectName: p.Name}
 			}
-		case ui.MatchKey(msg, keys.TopView):
-			if len(filtered) > 0 {
-				p := filtered[v.cursor]
-				return v, func() tea.Msg {
-					return SwitchToTopProjectMsg{Project: p}
-				}
-			}
-		case ui.MatchKey(msg, keys.Images):
-			return v, func() tea.Msg { return SwitchToImagesMsg{} }
-		case ui.MatchKey(msg, keys.Events):
-			return v, func() tea.Msg { return SwitchToEventsMsg{} }
-		case ui.MatchKey(msg, keys.SystemDf):
-			return v, func() tea.Msg { return SwitchToSystemMsg{} }
-		case msg.String() == " ":
-			if len(filtered) > 0 {
-				if v.selected == nil {
-					v.selected = make(map[int]bool)
-				}
-				if v.selected[v.cursor] {
-					delete(v.selected, v.cursor)
-				} else {
-					v.selected[v.cursor] = true
-				}
-				if v.cursor < len(filtered)-1 {
-					v.cursor++
-				}
-			}
-		case ui.MatchKey(msg, keys.ComposeUp):
-			if len(v.selected) > 0 {
-				return v, v.batchAction("up", filtered)
-			}
-			if len(filtered) > 0 {
-				p := filtered[v.cursor]
-				return v, func() tea.Msg {
-					return ComposeUpMsg{ProjectPath: p.Path, ProjectName: p.Name}
-				}
-			}
-		case ui.MatchKey(msg, keys.ComposeStop):
-			if len(v.selected) > 0 {
-				return v, v.batchAction("stop", filtered)
-			}
-			if len(filtered) > 0 {
-				p := filtered[v.cursor]
-				return v, func() tea.Msg {
-					return ComposeStopMsg{ProjectPath: p.Path, ProjectName: p.Name}
-				}
-			}
-		case ui.MatchKey(msg, keys.ComposeDown):
-			if len(v.selected) > 0 {
-				return v, v.batchAction("down", filtered)
-			}
-			if len(filtered) > 0 {
-				p := filtered[v.cursor]
-				v.pendingDown = true
-				v.pendingDownName = p.Name
-				v.pendingDownPath = p.Path
-			}
-		case ui.MatchKey(msg, keys.ComposeRestart):
-			if len(v.selected) > 0 {
-				return v, v.batchAction("restart", filtered)
-			}
-			if len(filtered) > 0 {
-				p := filtered[v.cursor]
-				return v, func() tea.Msg {
-					return ComposeRestartMsg{ProjectPath: p.Path, ProjectName: p.Name}
-				}
-			}
-		case ui.MatchKey(msg, keys.Bookmark):
-			if len(filtered) > 0 {
-				name := filtered[v.cursor].Name
-				return v, func() tea.Msg { return BookmarkToggleMsg{ProjectName: name} }
-			}
-		case ui.MatchKey(msg, keys.Copy):
-			if len(filtered) > 0 {
-				name := filtered[v.cursor].Name
-				return v, func() tea.Msg { return CopyMsg{Text: name, Label: name} }
-			}
-		case msg.String() >= "1" && msg.String() <= "4":
-			col := int(msg.String()[0]-'0') - 1
-			if v.sortColumn == col {
-				v.sortReverse = !v.sortReverse
-			} else {
-				v.sortColumn = col
-				v.sortReverse = false
-			}
-		case msg.Type == tea.KeyEsc:
-			if len(v.selected) > 0 {
-				v.selected = nil
-			}
+		}
+	default:
+		return v.handleProjectMisc(msg, keys, filtered)
+	}
+	return v, nil
+}
+
+func (v ProjectsView) handleProjectMisc(msg tea.KeyMsg, keys ui.KeyMap, filtered []docker.Project) (ProjectsView, tea.Cmd) {
+	switch {
+	case ui.MatchKey(msg, keys.Bookmark):
+		if len(filtered) > 0 {
+			name := filtered[v.cursor].Name
+			return v, func() tea.Msg { return BookmarkToggleMsg{ProjectName: name} }
+		}
+	case ui.MatchKey(msg, keys.Copy):
+		if len(filtered) > 0 {
+			name := filtered[v.cursor].Name
+			return v, func() tea.Msg { return CopyMsg{Text: name, Label: name} }
+		}
+	case msg.String() >= "1" && msg.String() <= "4":
+		col := int(msg.String()[0]-'0') - 1
+		if v.sortColumn == col {
+			v.sortReverse = !v.sortReverse
+		} else {
+			v.sortColumn = col
+			v.sortReverse = false
+		}
+	case msg.Type == tea.KeyEsc:
+		if len(v.selected) > 0 {
+			v.selected = nil
 		}
 	}
 

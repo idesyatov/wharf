@@ -92,14 +92,15 @@ func (v ServicesView) SetSize(w, h int) ServicesView {
 	return v
 }
 
-func (v ServicesView) Project() docker.Project   { return v.project }
-func (v ServicesView) Breadcrumb() string         { return "› " + v.project.Name }
-func (v ServicesView) ProjectName() string       { return v.project.Name }
-func (v ServicesView) ProjectPath() string      { return v.project.Path }
-func (v ServicesView) FilterMode() bool         { return v.filterMode }
-func (v ServicesView) FilterText() string        { return v.filterText }
-func (v ServicesView) PendingDown() bool         { return v.pendingDown }
-func (v ServicesView) PendingDownName() string   { return v.pendingDownName }
+func (v ServicesView) Project() docker.Project { return v.project }
+func (v ServicesView) Breadcrumb() string      { return "› " + v.project.Name }
+func (v ServicesView) ProjectName() string     { return v.project.Name }
+func (v ServicesView) ProjectPath() string     { return v.project.Path }
+func (v ServicesView) FilterMode() bool        { return v.filterMode }
+func (v ServicesView) FilterText() string      { return v.filterText }
+func (v ServicesView) PendingDown() bool       { return v.pendingDown }
+func (v ServicesView) PendingDownName() string { return v.pendingDownName }
+func (v ServicesView) HasStats() bool            { return len(v.stats) > 0 }
 
 func (v ServicesView) UpdateStats(stats map[string]docker.Stats) ServicesView {
 	v.stats = stats
@@ -286,164 +287,190 @@ func (v ServicesView) Update(msg tea.Msg, keys ui.KeyMap) (ServicesView, tea.Cmd
 		return v, nil
 
 	case tea.KeyMsg:
-		if v.filterMode {
-			switch msg.Type {
-			case tea.KeyEnter:
-				v.filterMode = false
-				v.cursor = 0
-			case tea.KeyEsc:
-				v.filterMode = false
-				v.filterText = ""
-				v.cursor = 0
-			case tea.KeyBackspace:
-				if len(v.filterText) > 0 {
-					v.filterText = v.filterText[:len(v.filterText)-1]
-					v.cursor = 0
-				}
-			default:
-				if msg.Type == tea.KeyRunes {
-					v.filterText += string(msg.Runes)
-					v.cursor = 0
-				}
+		return v.handleKeyMsg(msg, keys)
+	}
+
+	return v, nil
+}
+
+func (v ServicesView) handleFilterInput(msg tea.KeyMsg) (ServicesView, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEnter:
+		v.filterMode = false
+		v.cursor = 0
+	case tea.KeyEsc:
+		v.filterMode = false
+		v.filterText = ""
+		v.cursor = 0
+	case tea.KeyBackspace:
+		if len(v.filterText) > 0 {
+			v.filterText = v.filterText[:len(v.filterText)-1]
+			v.cursor = 0
+		}
+	default:
+		if msg.Type == tea.KeyRunes {
+			v.filterText += string(msg.Runes)
+			v.cursor = 0
+		}
+	}
+	return v, nil
+}
+
+func (v ServicesView) handleKeyMsg(msg tea.KeyMsg, keys ui.KeyMap) (ServicesView, tea.Cmd) {
+	if v.filterMode {
+		return v.handleFilterInput(msg)
+	}
+
+	if v.pendingDown {
+		v.pendingDown = false
+		if ui.MatchKey(msg, keys.Confirm) {
+			name := v.pendingDownName
+			path := v.pendingDownPath
+			return v, func() tea.Msg {
+				return ComposeDownMsg{ProjectPath: path, ProjectName: name}
 			}
+		}
+		return v, nil
+	}
+
+	if v.pendingG {
+		v.pendingG = false
+		if msg.String() == "g" {
+			v.cursor = 0
 			return v, nil
 		}
+	}
 
-		// Confirmation for compose down
-		if v.pendingDown {
-			v.pendingDown = false
-			if ui.MatchKey(msg, keys.Confirm) {
-				name := v.pendingDownName
-				path := v.pendingDownPath
-				return v, func() tea.Msg {
-					return ComposeDownMsg{ProjectPath: path, ProjectName: name}
-				}
-			}
-			return v, nil
+	filtered := v.filtered()
+	return v.handleNavAndActions(msg, keys, filtered)
+}
+
+func (v ServicesView) handleNavAndActions(msg tea.KeyMsg, keys ui.KeyMap, filtered []docker.Service) (ServicesView, tea.Cmd) {
+	switch {
+	case ui.MatchKey(msg, keys.Down):
+		if v.cursor < len(filtered)-1 {
+			v.cursor++
 		}
-
-		if v.pendingG {
-			v.pendingG = false
-			if msg.String() == "g" {
-				v.cursor = 0
-				return v, nil
+	case ui.MatchKey(msg, keys.Up):
+		if v.cursor > 0 {
+			v.cursor--
+		}
+	case ui.MatchKey(msg, keys.Bottom):
+		if len(filtered) > 0 {
+			v.cursor = len(filtered) - 1
+		}
+	case msg.String() == "g":
+		v.pendingG = true
+	case ui.MatchKey(msg, keys.Search):
+		v.filterMode = true
+		v.filterText = ""
+		return v, nil
+	case ui.MatchKey(msg, keys.Help):
+		return v, func() tea.Msg { return SwitchToHelpMsg{} }
+	case ui.MatchKey(msg, keys.TopView):
+		if svc, ok := v.selectedService(); ok && len(svc.Containers) > 0 {
+			ct := svc.Containers[0]
+			return v, func() tea.Msg {
+				return SwitchToTopContainerMsg{
+					ContainerID:   ct.ID,
+					ContainerName: ct.Name,
+					Image:         svc.Image,
+				}
 			}
 		}
+	case ui.MatchKey(msg, keys.Events):
+		return v, func() tea.Msg { return SwitchToEventsMsg{} }
+	case ui.MatchKey(msg, keys.Left):
+		return v, func() tea.Msg { return SwitchToProjectsMsg{} }
+	case ui.MatchKey(msg, keys.Right):
+		if svc, ok := v.selectedService(); ok {
+			return v, func() tea.Msg { return SwitchToDetailMsg{Service: svc} }
+		}
+	default:
+		return v.handleServiceActions(msg, keys, filtered)
+	}
+	return v, nil
+}
 
-		filtered := v.filtered()
+func (v ServicesView) handleServiceActions(msg tea.KeyMsg, keys ui.KeyMap, filtered []docker.Service) (ServicesView, tea.Cmd) {
+	switch {
+	case ui.MatchKey(msg, keys.Start):
+		if svc, ok := v.selectedService(); ok {
+			return v, func() tea.Msg { return ActionStartMsg{Service: svc} }
+		}
+	case ui.MatchKey(msg, keys.Stop):
+		if svc, ok := v.selectedService(); ok {
+			return v, func() tea.Msg { return ActionStopMsg{Service: svc} }
+		}
+	case ui.MatchKey(msg, keys.Restart):
+		if svc, ok := v.selectedService(); ok {
+			return v, func() tea.Msg { return ActionRestartMsg{Service: svc} }
+		}
+	case ui.MatchKey(msg, keys.Logs):
+		if svc, ok := v.selectedService(); ok && len(svc.Containers) > 0 {
+			return v, func() tea.Msg { return SwitchToLogsMsg{Container: svc.Containers[0]} }
+		}
+	default:
+		return v.handleServiceTools(msg, keys, filtered)
+	}
+	return v, nil
+}
 
-		switch {
-		case ui.MatchKey(msg, keys.Down):
-			if v.cursor < len(filtered)-1 {
-				v.cursor++
+func (v ServicesView) handleServiceTools(msg tea.KeyMsg, keys ui.KeyMap, filtered []docker.Service) (ServicesView, tea.Cmd) {
+	switch {
+	case ui.MatchKey(msg, keys.Compose):
+		return v, func() tea.Msg {
+			return SwitchToComposeMsg{ProjectName: v.project.Name, ProjectPath: v.project.Path}
+		}
+	case ui.MatchKey(msg, keys.VolumesKey):
+		return v, func() tea.Msg {
+			return SwitchToVolumesMsg{ProjectName: v.project.Name}
+		}
+	case ui.MatchKey(msg, keys.Exec):
+		if svc, ok := v.selectedService(); ok && len(svc.Containers) > 0 {
+			ct := svc.Containers[0]
+			if ct.Status != "running" {
+				break
 			}
-		case ui.MatchKey(msg, keys.Up):
-			if v.cursor > 0 {
-				v.cursor--
-			}
-		case ui.MatchKey(msg, keys.Bottom):
-			if len(filtered) > 0 {
-				v.cursor = len(filtered) - 1
-			}
-		case msg.String() == "g":
-			v.pendingG = true
-		case ui.MatchKey(msg, keys.Search):
-			v.filterMode = true
-			v.filterText = ""
-			return v, nil
-		case ui.MatchKey(msg, keys.Help):
-			return v, func() tea.Msg { return SwitchToHelpMsg{} }
-		case ui.MatchKey(msg, keys.TopView):
-			if svc, ok := v.selectedService(); ok && len(svc.Containers) > 0 {
-				ct := svc.Containers[0]
-				return v, func() tea.Msg {
-					return SwitchToTopContainerMsg{
-						ContainerID:   ct.ID,
-						ContainerName: ct.Name,
-						Image:         svc.Image,
-					}
-				}
-			}
-		case ui.MatchKey(msg, keys.Events):
-			return v, func() tea.Msg { return SwitchToEventsMsg{} }
-		case ui.MatchKey(msg, keys.Left):
-			return v, func() tea.Msg { return SwitchToProjectsMsg{} }
-		case ui.MatchKey(msg, keys.Right):
-			if svc, ok := v.selectedService(); ok {
-				return v, func() tea.Msg { return SwitchToDetailMsg{Service: svc} }
-			}
-		case ui.MatchKey(msg, keys.Start):
-			if svc, ok := v.selectedService(); ok {
-				return v, func() tea.Msg { return ActionStartMsg{Service: svc} }
-			}
-		case ui.MatchKey(msg, keys.Stop):
-			if svc, ok := v.selectedService(); ok {
-				return v, func() tea.Msg { return ActionStopMsg{Service: svc} }
-			}
-		case ui.MatchKey(msg, keys.Restart):
-			if svc, ok := v.selectedService(); ok {
-				return v, func() tea.Msg { return ActionRestartMsg{Service: svc} }
-			}
-		case ui.MatchKey(msg, keys.Logs):
-			if svc, ok := v.selectedService(); ok && len(svc.Containers) > 0 {
-				return v, func() tea.Msg { return SwitchToLogsMsg{Container: svc.Containers[0]} }
-			}
-		case ui.MatchKey(msg, keys.Compose):
 			return v, func() tea.Msg {
-				return SwitchToComposeMsg{ProjectName: v.project.Name, ProjectPath: v.project.Path}
+				return ExecMsg{ContainerID: ct.ID, ContainerName: ct.Name, Image: svc.Image}
 			}
-		case ui.MatchKey(msg, keys.VolumesKey):
+		}
+	case ui.MatchKey(msg, keys.NetworksKey):
+		return v, func() tea.Msg {
+			return SwitchToNetworksMsg{ProjectName: v.project.Name}
+		}
+	case ui.MatchKey(msg, keys.Build):
+		if svc, ok := v.selectedService(); ok {
 			return v, func() tea.Msg {
-				return SwitchToVolumesMsg{ProjectName: v.project.Name}
+				return BuildMsg{ProjectPath: v.project.Path, Service: svc.Name}
 			}
-		case ui.MatchKey(msg, keys.Exec):
-			if svc, ok := v.selectedService(); ok && len(svc.Containers) > 0 {
-				ct := svc.Containers[0]
-				if ct.Status != "running" {
-					break
-				}
-				return v, func() tea.Msg {
-					return ExecMsg{ContainerID: ct.ID, ContainerName: ct.Name, Image: svc.Image}
-				}
+		}
+	case ui.MatchKey(msg, keys.BuildAll):
+		return v, func() tea.Msg {
+			return BuildMsg{ProjectPath: v.project.Path, Service: ""}
+		}
+	case ui.MatchKey(msg, keys.Copy):
+		if svc, ok := v.selectedService(); ok && len(svc.Containers) > 0 {
+			id := svc.Containers[0].ID
+			return v, func() tea.Msg { return CopyMsg{Text: id, Label: id} }
+		}
+	case ui.MatchKey(msg, keys.EnvFile):
+		return v, func() tea.Msg {
+			return SwitchToEnvMsg{ProjectName: v.project.Name, ProjectPath: v.project.Path}
+		}
+	default:
+		if k := msg.String(); len(k) == 1 && k >= "1" && k <= "9" {
+			if cmd := v.matchCustomCommand(k, filtered); cmd != nil {
+				return v, cmd
 			}
-		case ui.MatchKey(msg, keys.NetworksKey):
-			return v, func() tea.Msg {
-				return SwitchToNetworksMsg{ProjectName: v.project.Name}
-			}
-		case ui.MatchKey(msg, keys.Build):
-			if svc, ok := v.selectedService(); ok {
-				return v, func() tea.Msg {
-					return BuildMsg{ProjectPath: v.project.Path, Service: svc.Name}
-				}
-			}
-		case ui.MatchKey(msg, keys.BuildAll):
-			return v, func() tea.Msg {
-				return BuildMsg{ProjectPath: v.project.Path, Service: ""}
-			}
-		case ui.MatchKey(msg, keys.Copy):
-			if svc, ok := v.selectedService(); ok && len(svc.Containers) > 0 {
-				id := svc.Containers[0].ID
-				return v, func() tea.Msg { return CopyMsg{Text: id, Label: id} }
-			}
-		case ui.MatchKey(msg, keys.EnvFile):
-			return v, func() tea.Msg {
-				return SwitchToEnvMsg{ProjectName: v.project.Name, ProjectPath: v.project.Path}
-			}
-		default:
-			if k := msg.String(); len(k) == 1 && k >= "1" && k <= "9" {
-				// Custom commands take priority over column sorting
-				if cmd := v.matchCustomCommand(k, filtered); cmd != nil {
-					return v, cmd
-				}
-				// Column sorting for 1-7
-				if k <= "7" {
-					col := int(k[0]-'0') - 1
-					if v.sortColumn == col {
-						v.sortReverse = !v.sortReverse
-					} else {
-						v.sortColumn = col
-						v.sortReverse = false
-					}
+			if k <= "7" {
+				col := int(k[0]-'0') - 1
+				if v.sortColumn == col {
+					v.sortReverse = !v.sortReverse
+				} else {
+					v.sortColumn = col
+					v.sortReverse = false
 				}
 			}
 		}

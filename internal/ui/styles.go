@@ -10,14 +10,14 @@ import (
 
 // Dark, muted palette — clean and professional
 var (
-	ColorPrimary   = lipgloss.Color("#5FAFFF")  // soft blue — logo, crumbs, selected
-	ColorSecondary = lipgloss.Color("#AFAFD7")  // lavender — project titles
-	ColorSuccess   = lipgloss.Color("#87D787")  // soft green — running
-	ColorWarning   = lipgloss.Color("#D7D75F")  // soft yellow — partial
-	ColorDanger    = lipgloss.Color("#FF5F87")  // soft red — stopped, errors
-	ColorMuted     = lipgloss.Color("#808080")  // gray — headers, secondary text, menu
-	ColorHighlight = lipgloss.Color("#AFAFD7")  // lavender — menu hotkeys
-	ColorBorder    = lipgloss.Color("#444444")  // dark gray — separators
+	ColorPrimary   = lipgloss.Color("#5FAFFF") // soft blue — logo, crumbs, selected
+	ColorSecondary = lipgloss.Color("#AFAFD7") // lavender — project titles
+	ColorSuccess   = lipgloss.Color("#87D787") // soft green — running
+	ColorWarning   = lipgloss.Color("#D7D75F") // soft yellow — partial
+	ColorDanger    = lipgloss.Color("#FF5F87") // soft red — stopped, errors
+	ColorMuted     = lipgloss.Color("#808080") // gray — headers, secondary text, menu
+	ColorHighlight = lipgloss.Color("#AFAFD7") // lavender — menu hotkeys
+	ColorBorder    = lipgloss.Color("#444444") // dark gray — separators
 )
 
 // Logo bar
@@ -62,13 +62,13 @@ var (
 
 // General
 var (
-	ErrorStyle       = lipgloss.NewStyle().Foreground(ColorDanger)
-	MutedStyle       = lipgloss.NewStyle().Foreground(ColorMuted)
-	FilterInputStyle = lipgloss.NewStyle().Foreground(ColorPrimary)
+	ErrorStyle           = lipgloss.NewStyle().Foreground(ColorDanger)
+	MutedStyle           = lipgloss.NewStyle().Foreground(ColorMuted)
+	FilterInputStyle     = lipgloss.NewStyle().Foreground(ColorPrimary)
 	BookmarkStyle        = lipgloss.NewStyle().Foreground(ColorWarning)
 	SearchHighlightStyle = lipgloss.NewStyle().Background(lipgloss.Color("#3A3A00")).Foreground(lipgloss.Color("#FFFF00"))
-	CommandStyle     = lipgloss.NewStyle().Foreground(ColorPrimary)
-	StatusLineStyle  = lipgloss.NewStyle().Foreground(ColorMuted).Padding(0, 1)
+	CommandStyle         = lipgloss.NewStyle().Foreground(ColorPrimary)
+	StatusLineStyle      = lipgloss.NewStyle().Foreground(ColorMuted).Padding(0, 1)
 )
 
 // Separator renders a horizontal line of the given width.

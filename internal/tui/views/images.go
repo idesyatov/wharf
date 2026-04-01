@@ -113,47 +113,52 @@ func (v ImagesView) Update(msg tea.Msg, keys ui.KeyMap) (ImagesView, tea.Cmd) {
 		return v, nil
 
 	case tea.KeyMsg:
-		if v.pendingPrune {
-			v.pendingPrune = false
-			if ui.MatchKey(msg, keys.Confirm) {
-				return v, func() tea.Msg { return PruneImagesActionMsg{} }
-			}
+		return v.handleKeyMsg(msg, keys)
+	}
+	return v, nil
+}
+
+func (v ImagesView) handleKeyMsg(msg tea.KeyMsg, keys ui.KeyMap) (ImagesView, tea.Cmd) {
+	if v.pendingPrune {
+		v.pendingPrune = false
+		if ui.MatchKey(msg, keys.Confirm) {
+			return v, func() tea.Msg { return PruneImagesActionMsg{} }
+		}
+		return v, nil
+	}
+
+	if v.pendingG {
+		v.pendingG = false
+		if msg.String() == "g" {
+			v.cursor = 0
 			return v, nil
 		}
+	}
 
-		if v.pendingG {
-			v.pendingG = false
-			if msg.String() == "g" {
-				v.cursor = 0
-				return v, nil
-			}
+	switch {
+	case ui.MatchKey(msg, keys.Down):
+		if v.cursor < len(v.images)-1 {
+			v.cursor++
 		}
-
-		switch {
-		case ui.MatchKey(msg, keys.Down):
-			if v.cursor < len(v.images)-1 {
-				v.cursor++
-			}
-		case ui.MatchKey(msg, keys.Up):
-			if v.cursor > 0 {
-				v.cursor--
-			}
-		case ui.MatchKey(msg, keys.Bottom):
-			if len(v.images) > 0 {
-				v.cursor = len(v.images) - 1
-			}
-		case msg.String() == "g":
-			v.pendingG = true
-		case ui.MatchKey(msg, keys.Pull):
-			ref := v.selectedRef()
-			if ref != "" {
-				return v, func() tea.Msg { return PullImageActionMsg{Ref: ref} }
-			}
-		case ui.MatchKey(msg, keys.Prune):
-			v.pendingPrune = true
-		case ui.MatchKey(msg, keys.Left):
-			return v, func() tea.Msg { return SwitchBackFromImagesMsg{} }
+	case ui.MatchKey(msg, keys.Up):
+		if v.cursor > 0 {
+			v.cursor--
 		}
+	case ui.MatchKey(msg, keys.Bottom):
+		if len(v.images) > 0 {
+			v.cursor = len(v.images) - 1
+		}
+	case msg.String() == "g":
+		v.pendingG = true
+	case ui.MatchKey(msg, keys.Pull):
+		ref := v.selectedRef()
+		if ref != "" {
+			return v, func() tea.Msg { return PullImageActionMsg{Ref: ref} }
+		}
+	case ui.MatchKey(msg, keys.Prune):
+		v.pendingPrune = true
+	case ui.MatchKey(msg, keys.Left):
+		return v, func() tea.Msg { return SwitchBackFromImagesMsg{} }
 	}
 	return v, nil
 }

@@ -139,25 +139,121 @@ func (a App) listenEvent() tea.Cmd {
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		a.width = msg.Width
-		a.height = msg.Height
-		a.projectsView = a.projectsView.SetSize(msg.Width, msg.Height-7)
-		a.servicesView = a.servicesView.SetSize(msg.Width, msg.Height-7)
-		a.detailView = a.detailView.SetSize(msg.Width, msg.Height-7)
-		a.logsView = a.logsView.SetSize(msg.Width, msg.Height-7)
-		a.composeView = a.composeView.SetSize(msg.Width, msg.Height-7)
-		a.volumesView = a.volumesView.SetSize(msg.Width, msg.Height-7)
-		a.networksView = a.networksView.SetSize(msg.Width, msg.Height-7)
-		a.imagesView = a.imagesView.SetSize(msg.Width, msg.Height-7)
-		a.eventsView = a.eventsView.SetSize(msg.Width, msg.Height-7)
-		a.systemView = a.systemView.SetSize(msg.Width, msg.Height-7)
-		a.envFileView = a.envFileView.SetSize(msg.Width, msg.Height-7)
-		a.helpView = a.helpView.SetSize(msg.Width, msg.Height-7)
-		a.topView = a.topView.SetSize(msg.Width, msg.Height-7)
+		return a.handleResize(msg)
+	case tea.KeyMsg:
+		return a.handleGlobalKeyMsg(msg)
+	case tea.MouseMsg:
+		// fall through to view delegation
+	default:
+		model, cmd := a.handleMsg(msg)
+		if model != nil {
+			return model, cmd
+		}
+	}
+
+	// Delegate to current view
+	return a.delegateToView(msg)
+}
+
+func (a App) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
+	a.width = msg.Width
+	a.height = msg.Height
+	h := msg.Height - 7
+	a.projectsView = a.projectsView.SetSize(msg.Width, h)
+	a.servicesView = a.servicesView.SetSize(msg.Width, h)
+	a.detailView = a.detailView.SetSize(msg.Width, h)
+	a.logsView = a.logsView.SetSize(msg.Width, h)
+	a.composeView = a.composeView.SetSize(msg.Width, h)
+	a.volumesView = a.volumesView.SetSize(msg.Width, h)
+	a.networksView = a.networksView.SetSize(msg.Width, h)
+	a.imagesView = a.imagesView.SetSize(msg.Width, h)
+	a.eventsView = a.eventsView.SetSize(msg.Width, h)
+	a.systemView = a.systemView.SetSize(msg.Width, h)
+	a.envFileView = a.envFileView.SetSize(msg.Width, h)
+	a.helpView = a.helpView.SetSize(msg.Width, h)
+	a.topView = a.topView.SetSize(msg.Width, h)
+	return a, nil
+}
+
+func (a App) handleGlobalKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if a.cmdMode.IsActive() {
+		switch msg.Type {
+		case tea.KeyEnter:
+			cmd := a.cmdMode.Execute()
+			return a, a.executeCommand(cmd)
+		case tea.KeyEsc:
+			a.cmdMode.Cancel()
+			return a, nil
+		default:
+			a.cmdMode.HandleKey(msg)
+			return a, nil
+		}
+	}
+
+	if a.isFilterMode() {
+		return a.delegateToView(msg)
+	}
+
+	switch {
+	case msg.String() == ":":
+		a.cmdMode.Enter()
 		return a, nil
+	case ui.MatchKey(msg, a.keys.Quit):
+		a.cleanup()
+		return a, tea.Quit
+	case ui.MatchKey(msg, a.keys.ForceQuit):
+		a.cleanup()
+		return a, tea.Quit
+	}
 
-	// --- View switching ---
+	return a.delegateToView(msg)
+}
 
+func (a App) delegateToView(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	switch a.state {
+	case viewProjects:
+		a.projectsView, cmd = a.projectsView.Update(msg, a.keys)
+	case viewServices:
+		a.servicesView, cmd = a.servicesView.Update(msg, a.keys)
+	case viewDetail:
+		a.detailView, cmd = a.detailView.Update(msg, a.keys)
+	case viewLogs:
+		a.logsView, cmd = a.logsView.Update(msg, a.keys)
+	case viewCompose:
+		a.composeView, cmd = a.composeView.Update(msg, a.keys)
+	case viewVolumes:
+		a.volumesView, cmd = a.volumesView.Update(msg, a.keys)
+	case viewNetworks:
+		a.networksView, cmd = a.networksView.Update(msg, a.keys)
+	case viewImages:
+		a.imagesView, cmd = a.imagesView.Update(msg, a.keys)
+	case viewEvents:
+		a.eventsView, cmd = a.eventsView.Update(msg, a.keys)
+	case viewSystem:
+		a.systemView, cmd = a.systemView.Update(msg, a.keys)
+	case viewEnv:
+		a.envFileView, cmd = a.envFileView.Update(msg, a.keys)
+	case viewHelp:
+		a.helpView, cmd = a.helpView.Update(msg, a.keys)
+	case viewTop:
+		a.topView, cmd = a.topView.Update(msg, a.keys)
+	}
+	return a, cmd
+}
+
+func (a App) handleMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m, c := a.handleViewSwitch(msg); m != nil {
+		return m, c
+	}
+	if m, c := a.handleDataAndTick(msg); m != nil {
+		return m, c
+	}
+	return a.handleActions(msg)
+}
+
+func (a App) handleViewSwitch(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
 	case views.SwitchToServicesMsg:
 		a.state = viewServices
 		a.servicesView = views.NewServicesView(msg.Project, a.cfg.CustomCommands).SetSize(a.width, a.height-5)
@@ -221,6 +317,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.notificationExp = time.Now().Add(2 * time.Second)
 		return a, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
 
+	}
+	return a.handleResourceMsg(msg)
+}
+
+func (a App) handleResourceMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
 	case views.SwitchToVolumesMsg:
 		a.prevState = a.state
 		a.state = viewVolumes
@@ -305,6 +407,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.notificationExp = time.Now().Add(2 * time.Second)
 		return a, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
 
+	}
+	return a.handleToolMsg(msg)
+}
+
+func (a App) handleToolMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
 	case views.SwitchToImagesMsg:
 		a.prevState = a.state
 		a.state = viewImages
@@ -356,8 +464,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} }),
 		)
 
-	// --- Build ---
+	}
+	return a.handleBuildAndEventsMsg(msg)
+}
 
+func (a App) handleBuildAndEventsMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
 	case views.BuildMsg:
 		composePath := ""
 		if msg.ComposePath != "" {
@@ -421,8 +533,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.state = a.prevState
 		return a, nil
 
-	// --- System ---
+	}
+	return a.handleSystemAndMiscMsg(msg)
+}
 
+func (a App) handleSystemAndMiscMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
 	case views.SwitchToSystemMsg:
 		a.prevState = a.state
 		a.state = viewSystem
@@ -457,8 +573,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} }),
 		)
 
-	// --- Browser ---
+	}
+	return a.handleFileAndNavMsg(msg)
+}
 
+func (a App) handleFileAndNavMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
 	case views.OpenBrowserMsg:
 		err := util.OpenBrowser(msg.URL)
 		if err != nil {
@@ -541,9 +661,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case views.SwitchBackFromHelpMsg:
 		a.state = a.prevState
 		return a, nil
+	}
+	return nil, nil
+}
 
-	// --- Data loading ---
-
+func (a App) handleDataAndTick(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
 	case views.ProjectsLoadedMsg:
 		if a.state == viewServices {
 			for _, p := range msg.Projects {
@@ -616,8 +739,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return notificationClearMsg{}
 		})
 
-	// --- Actions ---
+	}
+	return nil, nil
+}
 
+func (a App) handleActions(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
 	case views.ActionStartMsg:
 		return a, a.executeAction("start", msg.Service)
 	case views.ActionStopMsg:
@@ -701,73 +828,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
-	// --- Quit ---
-
-	case tea.KeyMsg:
-		// Command mode input
-		if a.cmdMode.IsActive() {
-			switch msg.Type {
-			case tea.KeyEnter:
-				cmd := a.cmdMode.Execute()
-				return a, a.executeCommand(cmd)
-			case tea.KeyEsc:
-				a.cmdMode.Cancel()
-				return a, nil
-			default:
-				a.cmdMode.HandleKey(msg)
-				return a, nil
-			}
-		}
-
-		// In filter mode, don't intercept keys
-		if a.isFilterMode() {
-			break
-		}
-
-		switch {
-		case msg.String() == ":":
-			a.cmdMode.Enter()
-			return a, nil
-		case ui.MatchKey(msg, a.keys.Quit):
-			a.cleanup()
-			return a, tea.Quit
-		case ui.MatchKey(msg, a.keys.ForceQuit):
-			a.cleanup()
-			return a, tea.Quit
-		}
 	}
-
-	// Delegate to current view
-	var cmd tea.Cmd
-	switch a.state {
-	case viewProjects:
-		a.projectsView, cmd = a.projectsView.Update(msg, a.keys)
-	case viewServices:
-		a.servicesView, cmd = a.servicesView.Update(msg, a.keys)
-	case viewDetail:
-		a.detailView, cmd = a.detailView.Update(msg, a.keys)
-	case viewLogs:
-		a.logsView, cmd = a.logsView.Update(msg, a.keys)
-	case viewCompose:
-		a.composeView, cmd = a.composeView.Update(msg, a.keys)
-	case viewVolumes:
-		a.volumesView, cmd = a.volumesView.Update(msg, a.keys)
-	case viewNetworks:
-		a.networksView, cmd = a.networksView.Update(msg, a.keys)
-	case viewImages:
-		a.imagesView, cmd = a.imagesView.Update(msg, a.keys)
-	case viewEvents:
-		a.eventsView, cmd = a.eventsView.Update(msg, a.keys)
-	case viewSystem:
-		a.systemView, cmd = a.systemView.Update(msg, a.keys)
-	case viewEnv:
-		a.envFileView, cmd = a.envFileView.Update(msg, a.keys)
-	case viewHelp:
-		a.helpView, cmd = a.helpView.Update(msg, a.keys)
-	case viewTop:
-		a.topView, cmd = a.topView.Update(msg, a.keys)
-	}
-	return a, cmd
+	return nil, nil
 }
 
 func (a App) isFilterMode() bool {
@@ -962,10 +1024,6 @@ func (a App) renderMenuBar() string {
 		actionsLine = joinMenuItems(
 			ui.FormatMenuItem("P", "rune all"),
 		)
-	case viewTop:
-		actionsLine = joinMenuItems(
-			ui.FormatMenuItem("h", "back"),
-		)
 	}
 
 	content := actionsLine
@@ -1033,54 +1091,71 @@ func (a App) renderStatusLine() string {
 	if a.cmdMode.IsActive() {
 		return ui.CommandStyle.Render(":" + a.cmdMode.Input() + "█")
 	}
-
 	if a.notification != "" && time.Now().Before(a.notificationExp) {
 		if a.notificationErr {
 			return ui.ErrorStyle.Render(a.notification)
 		}
 		return ui.RunningStyle.Render(a.notification)
 	}
+	if s := a.renderConfirmDialog(); s != "" {
+		return s
+	}
+	if a.state == viewServices && !a.servicesView.HasStats() {
+		return ui.RunningStyle.Render("Loading stats...")
+	}
+	if a.state == viewTop && !a.topView.HasStats() {
+		return ui.RunningStyle.Render("Loading stats...")
+	}
+	return a.renderFilterStatus()
+}
 
-	// Confirmation dialogs
-	if a.state == viewProjects && a.projectsView.PendingDown() {
-		return ui.ErrorStyle.Render("Down (REMOVE containers) \"" + a.projectsView.PendingDownName() + "\"? [y/N]")
+func (a App) renderConfirmDialog() string {
+	switch a.state {
+	case viewProjects:
+		if a.projectsView.PendingDown() {
+			return ui.ErrorStyle.Render("Down (REMOVE containers) \"" + a.projectsView.PendingDownName() + "\"? [y/N]")
+		}
+	case viewServices:
+		if a.servicesView.PendingDown() {
+			return ui.ErrorStyle.Render("Down (REMOVE containers) \"" + a.servicesView.PendingDownName() + "\"? [y/N]")
+		}
+	case viewVolumes:
+		if a.volumesView.PendingRemove() {
+			return ui.ErrorStyle.Render("Remove volume \"" + a.volumesView.PendingVolName() + "\"? [y/N]")
+		}
+		if a.volumesView.PendingPrune() {
+			return ui.ErrorStyle.Render("Remove all unused volumes? [y/N]")
+		}
+	case viewImages:
+		if a.imagesView.PendingPrune() {
+			return ui.ErrorStyle.Render("Remove all unused images? [y/N]")
+		}
+	case viewSystem:
+		if a.systemView.PendingPrune() {
+			return ui.ErrorStyle.Render("Prune all unused resources (images, containers, volumes, build cache)? [y/N]")
+		}
 	}
-	if a.state == viewServices && a.servicesView.PendingDown() {
-		return ui.ErrorStyle.Render("Down (REMOVE containers) \"" + a.servicesView.PendingDownName() + "\"? [y/N]")
-	}
-	if a.state == viewVolumes && a.volumesView.PendingRemove() {
-		return ui.ErrorStyle.Render("Remove volume \"" + a.volumesView.PendingVolName() + "\"? [y/N]")
-	}
-	if a.state == viewVolumes && a.volumesView.PendingPrune() {
-		return ui.ErrorStyle.Render("Remove all unused volumes? [y/N]")
-	}
-	if a.state == viewImages && a.imagesView.PendingPrune() {
-		return ui.ErrorStyle.Render("Remove all unused images? [y/N]")
-	}
-	if a.state == viewSystem && a.systemView.PendingPrune() {
-		return ui.ErrorStyle.Render("Prune all unused resources (images, containers, volumes, build cache)? [y/N]")
-	}
+	return ""
+}
 
-	// Filter mode
-	if a.state == viewProjects && a.projectsView.FilterMode() {
-		return ui.FilterInputStyle.Render("/ " + a.projectsView.FilterText() + "█")
-	}
-	if a.state == viewServices && a.servicesView.FilterMode() {
-		return ui.FilterInputStyle.Render("/ " + a.servicesView.FilterText() + "█")
-	}
-
-	// Log search mode
-	if a.state == viewLogs && a.logsView.SearchMode() {
-		return ui.FilterInputStyle.Render("/ " + a.logsView.SearchText() + "█")
-	}
-	// Log search active (not in input mode)
-	if a.state == viewLogs {
-		info := a.logsView.SearchInfo()
-		if info != "" {
+func (a App) renderFilterStatus() string {
+	switch a.state {
+	case viewProjects:
+		if a.projectsView.FilterMode() {
+			return ui.FilterInputStyle.Render("/ " + a.projectsView.FilterText() + "█")
+		}
+	case viewServices:
+		if a.servicesView.FilterMode() {
+			return ui.FilterInputStyle.Render("/ " + a.servicesView.FilterText() + "█")
+		}
+	case viewLogs:
+		if a.logsView.SearchMode() {
+			return ui.FilterInputStyle.Render("/ " + a.logsView.SearchText() + "█")
+		}
+		if info := a.logsView.SearchInfo(); info != "" {
 			return ui.MutedStyle.Render("/" + a.logsView.SearchText() + "  " + info)
 		}
 	}
-
 	return ""
 }
 

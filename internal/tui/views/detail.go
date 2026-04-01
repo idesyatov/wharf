@@ -16,15 +16,15 @@ type DetailErrorMsg struct{ Err error }
 type SwitchBackFromDetailMsg struct{}
 
 type DetailView struct {
-	service   docker.Service
-	detail    docker.ContainerDetail
-	loaded    bool
-	err       error
-	sections  []string
-	scroll    int
-	width     int
-	height    int
-	pendingG  bool
+	service  docker.Service
+	detail   docker.ContainerDetail
+	loaded   bool
+	err      error
+	sections []string
+	scroll   int
+	width    int
+	height   int
+	pendingG bool
 }
 
 func NewDetailView(svc docker.Service) DetailView {
@@ -77,62 +77,67 @@ func (v DetailView) Update(msg tea.Msg, keys ui.KeyMap) (DetailView, tea.Cmd) {
 		return v, nil
 
 	case tea.KeyMsg:
-		if v.pendingG {
-			v.pendingG = false
-			if msg.String() == "g" {
-				v.scroll = 0
-				return v, nil
-			}
-		}
+		return v.handleKeyMsg(msg, keys)
+	}
 
-		totalLines := len(v.sections)
-		visible := v.visibleHeight()
+	return v, nil
+}
 
-		switch {
-		case ui.MatchKey(msg, keys.Down):
-			if v.scroll < totalLines-visible {
-				v.scroll++
-			}
-		case ui.MatchKey(msg, keys.Up):
-			if v.scroll > 0 {
-				v.scroll--
-			}
-		case ui.MatchKey(msg, keys.Bottom):
-			if totalLines > visible {
-				v.scroll = totalLines - visible
-			}
-		case msg.String() == "g":
-			v.pendingG = true
-		case ui.MatchKey(msg, keys.Left):
-			return v, func() tea.Msg { return SwitchBackFromDetailMsg{} }
-		case ui.MatchKey(msg, keys.Logs):
-			if len(v.service.Containers) > 0 {
-				ct := v.service.Containers[0]
-				return v, func() tea.Msg { return SwitchToLogsMsg{Container: ct} }
-			}
-		case ui.MatchKey(msg, keys.Exec):
-			if len(v.service.Containers) > 0 {
-				ct := v.service.Containers[0]
-				if ct.Status != "running" {
-					break
-				}
-				return v, func() tea.Msg {
-					return ExecMsg{ContainerID: ct.ID, ContainerName: ct.Name, Image: ct.Image}
-				}
-			}
-		case ui.MatchKey(msg, keys.Copy):
-			if v.loaded {
-				id := v.detail.ID
-				return v, func() tea.Msg { return CopyMsg{Text: id, Label: id} }
-			}
-		case ui.MatchKey(msg, keys.CopyFull):
-			if v.loaded {
-				info := fmt.Sprintf("ID: %s\nImage: %s\nStatus: %s", v.detail.ID, v.detail.Image, v.detail.Status)
-				return v, func() tea.Msg { return CopyMsg{Text: info, Label: v.detail.ID} }
-			}
+func (v DetailView) handleKeyMsg(msg tea.KeyMsg, keys ui.KeyMap) (DetailView, tea.Cmd) {
+	if v.pendingG {
+		v.pendingG = false
+		if msg.String() == "g" {
+			v.scroll = 0
+			return v, nil
 		}
 	}
 
+	totalLines := len(v.sections)
+	visible := v.visibleHeight()
+
+	switch {
+	case ui.MatchKey(msg, keys.Down):
+		if v.scroll < totalLines-visible {
+			v.scroll++
+		}
+	case ui.MatchKey(msg, keys.Up):
+		if v.scroll > 0 {
+			v.scroll--
+		}
+	case ui.MatchKey(msg, keys.Bottom):
+		if totalLines > visible {
+			v.scroll = totalLines - visible
+		}
+	case msg.String() == "g":
+		v.pendingG = true
+	case ui.MatchKey(msg, keys.Left):
+		return v, func() tea.Msg { return SwitchBackFromDetailMsg{} }
+	case ui.MatchKey(msg, keys.Logs):
+		if len(v.service.Containers) > 0 {
+			ct := v.service.Containers[0]
+			return v, func() tea.Msg { return SwitchToLogsMsg{Container: ct} }
+		}
+	case ui.MatchKey(msg, keys.Exec):
+		if len(v.service.Containers) > 0 {
+			ct := v.service.Containers[0]
+			if ct.Status != "running" {
+				break
+			}
+			return v, func() tea.Msg {
+				return ExecMsg{ContainerID: ct.ID, ContainerName: ct.Name, Image: ct.Image}
+			}
+		}
+	case ui.MatchKey(msg, keys.Copy):
+		if v.loaded {
+			id := v.detail.ID
+			return v, func() tea.Msg { return CopyMsg{Text: id, Label: id} }
+		}
+	case ui.MatchKey(msg, keys.CopyFull):
+		if v.loaded {
+			info := fmt.Sprintf("ID: %s\nImage: %s\nStatus: %s", v.detail.ID, v.detail.Image, v.detail.Status)
+			return v, func() tea.Msg { return CopyMsg{Text: info, Label: v.detail.ID} }
+		}
+	}
 	return v, nil
 }
 
@@ -239,25 +244,32 @@ func (v DetailView) buildSections() []string {
 		lines = append(lines, fmt.Sprintf("  %-14s %s", "Entrypoint", strings.Join(d.Entrypoint, " ")))
 	}
 
-	if d.Health.Status != "none" {
-		lines = append(lines, "")
-		status := d.Health.Status
-		if d.Health.FailingStreak > 0 {
-			status += fmt.Sprintf(" (failing streak: %d)", d.Health.FailingStreak)
-		}
-		lines = append(lines, "  Health Check")
-		lines = append(lines, fmt.Sprintf("    Status: %s", status))
-		showLogs := d.Health.Log
-		if len(showLogs) > 3 {
-			showLogs = showLogs[len(showLogs)-3:]
-		}
-		for _, entry := range showLogs {
-			lines = append(lines, fmt.Sprintf("    %s  exit=%d  %s",
-				entry.Start.Format("15:04:05"), entry.ExitCode,
-				truncate(entry.Output, 60)))
-		}
-	}
+	lines = append(lines, v.buildHealthSection()...)
 
+	return lines
+}
+
+func (v DetailView) buildHealthSection() []string {
+	d := v.detail
+	if d.Health.Status == "none" {
+		return nil
+	}
+	var lines []string
+	status := d.Health.Status
+	if d.Health.FailingStreak > 0 {
+		status += fmt.Sprintf(" (failing streak: %d)", d.Health.FailingStreak)
+	}
+	lines = append(lines, "", "  Health Check")
+	lines = append(lines, fmt.Sprintf("    Status: %s", status))
+	showLogs := d.Health.Log
+	if len(showLogs) > 3 {
+		showLogs = showLogs[len(showLogs)-3:]
+	}
+	for _, entry := range showLogs {
+		lines = append(lines, fmt.Sprintf("    %s  exit=%d  %s",
+			entry.Start.Format("15:04:05"), entry.ExitCode,
+			truncate(entry.Output, 60)))
+	}
 	return lines
 }
 

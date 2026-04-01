@@ -7,46 +7,46 @@ import (
 
 // KeyMap defines all keybindings for the application.
 type KeyMap struct {
-	Quit      key.Binding
-	ForceQuit key.Binding
-	Up        key.Binding
-	Down      key.Binding
-	Left      key.Binding
-	Right     key.Binding
-	Top       key.Binding
-	Bottom    key.Binding
-	Search    key.Binding
-	Help      key.Binding
-	Start     key.Binding
-	Stop      key.Binding
-	Restart   key.Binding
-	Logs       key.Binding
-	Follow     key.Binding
+	Quit           key.Binding
+	ForceQuit      key.Binding
+	Up             key.Binding
+	Down           key.Binding
+	Left           key.Binding
+	Right          key.Binding
+	Top            key.Binding
+	Bottom         key.Binding
+	Search         key.Binding
+	Help           key.Binding
+	Start          key.Binding
+	Stop           key.Binding
+	Restart        key.Binding
+	Logs           key.Binding
+	Follow         key.Binding
 	ComposeUp      key.Binding
 	ComposeStop    key.Binding
 	ComposeDown    key.Binding
 	ComposeRestart key.Binding
-	Confirm     key.Binding
-	Compose     key.Binding
-	VolumesKey  key.Binding
-	NetworksKey key.Binding
-	Remove      key.Binding
-	Prune       key.Binding
-	Exec        key.Binding
-	Images      key.Binding
-	Pull        key.Binding
-	Build       key.Binding
-	BuildAll    key.Binding
-	Bookmark    key.Binding
-	Copy        key.Binding
-	CopyFull    key.Binding
-	OpenBrowser key.Binding
-	Events      key.Binding
-	SystemDf    key.Binding
-	SaveLogs    key.Binding
-	EnvFile     key.Binding
-	Edit        key.Binding
-	TopView     key.Binding
+	Confirm        key.Binding
+	Compose        key.Binding
+	VolumesKey     key.Binding
+	NetworksKey    key.Binding
+	Remove         key.Binding
+	Prune          key.Binding
+	Exec           key.Binding
+	Images         key.Binding
+	Pull           key.Binding
+	Build          key.Binding
+	BuildAll       key.Binding
+	Bookmark       key.Binding
+	Copy           key.Binding
+	CopyFull       key.Binding
+	OpenBrowser    key.Binding
+	Events         key.Binding
+	SystemDf       key.Binding
+	SaveLogs       key.Binding
+	EnvFile        key.Binding
+	Edit           key.Binding
+	TopView        key.Binding
 }
 
 // DefaultKeyMap returns the default keybindings.

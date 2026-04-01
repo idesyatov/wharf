@@ -62,9 +62,10 @@ func NewTopViewContainer(containerID, containerName, image string) TopView {
 	}
 }
 
-func (v TopView) IsProjectMode() bool { return v.containerID == "" }
+func (v TopView) IsProjectMode() bool     { return v.containerID == "" }
 func (v TopView) Project() docker.Project { return v.project }
-func (v TopView) ContainerID() string     { return v.containerID }
+func (v TopView) ContainerID() string { return v.containerID }
+func (v TopView) HasStats() bool      { return len(v.stats) > 0 }
 
 func (v TopView) Breadcrumb() string {
 	if v.IsProjectMode() {
@@ -233,16 +234,20 @@ func (v TopView) renderContainer() string {
 
 	if shouldShowSparkline(v.cpuHistory[v.containerID], 1.0) {
 		lines = append(lines,
-			fmt.Sprintf("  %s%s", pad, ui.MutedStyle.Render(ui.Sparkline(v.cpuHistory[v.containerID], 100))))
+			fmt.Sprintf("  %s%s", pad, ui.ColoredSparkline(v.cpuHistory[v.containerID], 100)))
 	}
 
 	lines = append(lines, "",
 		fmt.Sprintf("  %s  %s / %s", labelStyle.Render("Memory:   "), formatMemory(s.MemUsage), formatMemory(s.MemLimit)),
 	)
 
-	if shouldShowSparkline(v.memHistory[v.containerID], 1048576) {
+	memThreshold := float64(s.MemLimit) * 0.01
+	if memThreshold < 1048576 {
+		memThreshold = 1048576
+	}
+	if shouldShowSparkline(v.memHistory[v.containerID], memThreshold) {
 		lines = append(lines,
-			fmt.Sprintf("  %s%s", pad, ui.MutedStyle.Render(ui.Sparkline(v.memHistory[v.containerID], float64(s.MemLimit)))))
+			fmt.Sprintf("  %s%s", pad, ui.ColoredSparkline(v.memHistory[v.containerID], float64(s.MemLimit))))
 	}
 
 	lines = append(lines, "",
