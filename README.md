@@ -1,5 +1,9 @@
 # ⚓ Wharf
 
+[![CI](https://github.com/idesyatov/wharf/actions/workflows/ci.yml/badge.svg)](https://github.com/idesyatov/wharf/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/idesyatov/wharf)](https://github.com/idesyatov/wharf/releases)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/idesyatov/wharf)](go.mod)
+[![Go Report Card](https://goreportcard.com/badge/github.com/idesyatov/wharf)](https://goreportcard.com/report/github.com/idesyatov/wharf)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 A terminal UI for managing Docker Compose stacks. Inspired by [k9s](https://github.com/derailed/k9s).
@@ -9,8 +13,8 @@ A terminal UI for managing Docker Compose stacks. Inspired by [k9s](https://gith
 ## Features
 
 - Browse Docker Compose projects and services
-- Start, stop, restart services with a single keystroke
-- Docker Compose up/down/build
+- Start, stop, restart services and compose projects
+- Docker Compose up / stop / down / restart / build
 - Exec into containers (shell) directly from TUI
 - Real-time CPU and memory monitoring
 - Stream container logs with follow/pause and search
@@ -25,6 +29,7 @@ A terminal UI for managing Docker Compose stacks. Inspired by [k9s](https://gith
 - Sort tables by any column
 - Vim-style navigation (hjkl, gg/G, /, :q, arrows)
 - Customizable themes (dark/light/custom)
+- Auto-update check via GitHub Releases
 - Configurable via `~/.config/wharf/config.yaml`
 - Single binary, zero dependencies
 
@@ -58,6 +63,7 @@ make docker-build-all
 
 ```bash
 wharf            # start TUI
+wharf --version  # show version
 wharf --config   # show config path and current settings
 ```
 
@@ -75,31 +81,43 @@ wharf --config   # show config path and current settings
 | `?` | Help |
 | `q` / `:q` | Quit |
 
-### Actions
+### Service actions
 | Key | Action |
 |-----|--------|
-| `s` / `S` / `r` | Start / Stop / Restart service |
-| `e` | Exec into container |
-| `b` / `B` | Build service / all |
-| `u` / `d` | Compose up / down |
-| `L` | View logs |
+| `s` | Start service |
+| `S` | Stop service |
+| `r` | Restart service |
+| `e` | Exec into container (shell) |
 | `o` | Open in browser |
+| `L` | View logs |
+
+### Compose actions
+| Key | Action |
+|-----|--------|
+| `u` | Compose up (start project) |
+| `d` | Compose stop (stop, keep containers) |
+| `X` | Compose down (stop and REMOVE containers) |
+| `R` | Compose restart |
+| `b` / `B` | Build service / all |
+
+### Views
+| Key | Action |
+|-----|--------|
 | `c` | View compose file |
-| `v` / `n` | Volumes / Networks |
+| `v` | Volumes |
+| `n` | Networks |
 | `i` | Images |
 | `E` | Docker events |
 | `D` | System disk usage |
+
+### Other
+| Key | Action |
+|-----|--------|
 | `*` | Toggle bookmark |
 | `y` / `Y` | Copy ID / full info |
 | `f` | Toggle log follow |
+| `n` / `N` | Next / previous log search match |
 | `P` | Prune (context-dependent) |
-
-### Logs search
-| Key | Action |
-|-----|--------|
-| `/` | Search in logs |
-| `n` / `N` | Next / previous match |
-| `Esc` | Clear search |
 
 ## Configuration
 
@@ -138,7 +156,7 @@ cd examples/multi-service && docker compose up -d && cd ../..
 ### Releasing
 
 ```bash
-make release VERSION=v0.4.0
+make release VERSION=v0.4.2
 ```
 
 ## Tech Stack
