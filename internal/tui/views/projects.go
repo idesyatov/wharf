@@ -46,6 +46,11 @@ type ComposeResultMsg struct {
 	ProjectName string
 }
 
+type BatchActionMsg struct {
+	Action   string
+	Projects []docker.Project
+}
+
 type ProjectsView struct {
 	projects        []docker.Project
 	cursor          int
@@ -62,6 +67,7 @@ type ProjectsView struct {
 	cfg             *config.Config
 	sortColumn      int
 	sortReverse     bool
+	selected        map[int]bool
 }
 
 func NewProjectsView(pollInterval time.Duration, cfg *config.Config) ProjectsView {
@@ -74,10 +80,13 @@ func (v ProjectsView) SetSize(w, h int) ProjectsView {
 	return v
 }
 
+func (v ProjectsView) Breadcrumb() string  { return "" }
 func (v ProjectsView) FilterMode() bool    { return v.filterMode }
 func (v ProjectsView) FilterText() string   { return v.filterText }
 func (v ProjectsView) PendingDown() bool    { return v.pendingDown }
 func (v ProjectsView) PendingDownName() string { return v.pendingDownName }
+func (v ProjectsView) SelectedCount() int      { return len(v.selected) }
+func (v ProjectsView) HasSelected() bool       { return len(v.selected) > 0 }
 
 func LoadProjects(client *docker.Client) tea.Cmd {
 	return func() tea.Msg {
@@ -185,6 +194,26 @@ func (v ProjectsView) Update(msg tea.Msg, keys ui.KeyMap) (ProjectsView, tea.Cmd
 		v.err = msg.Err
 		return v, nil
 
+	case tea.MouseMsg:
+		filtered := v.filtered()
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			row := msg.Y - 4 // info + breadcrumbs + header
+			if row >= 0 && row < len(filtered) {
+				v.cursor = row
+			}
+		}
+		if msg.Button == tea.MouseButtonWheelDown {
+			if v.cursor < len(filtered)-1 {
+				v.cursor++
+			}
+		}
+		if msg.Button == tea.MouseButtonWheelUp {
+			if v.cursor > 0 {
+				v.cursor--
+			}
+		}
+		return v, nil
+
 	case tea.KeyMsg:
 		if v.filterMode {
 			switch msg.Type {
@@ -266,7 +295,24 @@ func (v ProjectsView) Update(msg tea.Msg, keys ui.KeyMap) (ProjectsView, tea.Cmd
 			return v, func() tea.Msg { return SwitchToEventsMsg{} }
 		case ui.MatchKey(msg, keys.SystemDf):
 			return v, func() tea.Msg { return SwitchToSystemMsg{} }
+		case msg.String() == " ":
+			if len(filtered) > 0 {
+				if v.selected == nil {
+					v.selected = make(map[int]bool)
+				}
+				if v.selected[v.cursor] {
+					delete(v.selected, v.cursor)
+				} else {
+					v.selected[v.cursor] = true
+				}
+				if v.cursor < len(filtered)-1 {
+					v.cursor++
+				}
+			}
 		case ui.MatchKey(msg, keys.ComposeUp):
+			if len(v.selected) > 0 {
+				return v, v.batchAction("up", filtered)
+			}
 			if len(filtered) > 0 {
 				p := filtered[v.cursor]
 				return v, func() tea.Msg {
@@ -274,6 +320,9 @@ func (v ProjectsView) Update(msg tea.Msg, keys ui.KeyMap) (ProjectsView, tea.Cmd
 				}
 			}
 		case ui.MatchKey(msg, keys.ComposeStop):
+			if len(v.selected) > 0 {
+				return v, v.batchAction("stop", filtered)
+			}
 			if len(filtered) > 0 {
 				p := filtered[v.cursor]
 				return v, func() tea.Msg {
@@ -281,6 +330,9 @@ func (v ProjectsView) Update(msg tea.Msg, keys ui.KeyMap) (ProjectsView, tea.Cmd
 				}
 			}
 		case ui.MatchKey(msg, keys.ComposeDown):
+			if len(v.selected) > 0 {
+				return v, v.batchAction("down", filtered)
+			}
 			if len(filtered) > 0 {
 				p := filtered[v.cursor]
 				v.pendingDown = true
@@ -288,6 +340,9 @@ func (v ProjectsView) Update(msg tea.Msg, keys ui.KeyMap) (ProjectsView, tea.Cmd
 				v.pendingDownPath = p.Path
 			}
 		case ui.MatchKey(msg, keys.ComposeRestart):
+			if len(v.selected) > 0 {
+				return v, v.batchAction("restart", filtered)
+			}
 			if len(filtered) > 0 {
 				p := filtered[v.cursor]
 				return v, func() tea.Msg {
@@ -311,6 +366,10 @@ func (v ProjectsView) Update(msg tea.Msg, keys ui.KeyMap) (ProjectsView, tea.Cmd
 			} else {
 				v.sortColumn = col
 				v.sortReverse = false
+			}
+		case msg.Type == tea.KeyEsc:
+			if len(v.selected) > 0 {
+				v.selected = nil
 			}
 		}
 	}
@@ -367,7 +426,13 @@ func (v ProjectsView) View() string {
 
 		if i == v.cursor {
 			mark := "  "
-			if v.cfg != nil && v.cfg.IsBookmarked(p.Name) {
+			if v.HasSelected() {
+				if v.selected[i] {
+					mark = "✓ "
+				} else {
+					mark = "  "
+				}
+			} else if v.cfg != nil && v.cfg.IsBookmarked(p.Name) {
 				mark = "* "
 			}
 			plainRow := fmt.Sprintf("%s%-*s %-*s %-*s %s",
@@ -383,7 +448,13 @@ func (v ProjectsView) View() string {
 
 		statusStr := statusText(p.Status)
 		mark := "  "
-		if v.cfg != nil && v.cfg.IsBookmarked(p.Name) {
+		if v.HasSelected() {
+			if v.selected[i] {
+				mark = ui.RunningStyle.Render("✓") + " "
+			} else {
+				mark = "  "
+			}
+		} else if v.cfg != nil && v.cfg.IsBookmarked(p.Name) {
 			mark = ui.BookmarkStyle.Render("★") + " "
 		}
 
@@ -447,6 +518,28 @@ func padRight(s string, width int) string {
 		return s
 	}
 	return s + strings.Repeat(" ", width-visible)
+}
+
+func (v ProjectsView) batchAction(action string, filtered []docker.Project) tea.Cmd {
+	var projects []docker.Project
+	for idx := range v.selected {
+		if idx < len(filtered) {
+			projects = append(projects, filtered[idx])
+		}
+	}
+	return func() tea.Msg {
+		return BatchActionMsg{Action: action, Projects: projects}
+	}
+}
+
+func (v ProjectsView) SelectedProjects(filtered []docker.Project) []docker.Project {
+	var projects []docker.Project
+	for idx := range v.selected {
+		if idx < len(filtered) {
+			projects = append(projects, filtered[idx])
+		}
+	}
+	return projects
 }
 
 type SwitchToServicesMsg struct{ Project docker.Project }

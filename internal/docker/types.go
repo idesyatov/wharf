@@ -52,6 +52,20 @@ type ContainerDetail struct {
 	Networks      []string
 	Cmd           []string
 	Entrypoint    []string
+	Health        HealthCheck
+}
+
+type HealthCheck struct {
+	Status        string
+	FailingStreak int
+	Log           []HealthLog
+}
+
+type HealthLog struct {
+	Start    time.Time
+	End      time.Time
+	ExitCode int
+	Output   string
 }
 
 type VolumeMount struct {

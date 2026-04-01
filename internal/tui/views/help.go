@@ -16,6 +16,8 @@ type HelpView struct {
 	scroll int
 }
 
+func (v HelpView) Breadcrumb() string { return "Help" }
+
 func NewHelpView() HelpView {
 	return HelpView{}
 }
@@ -71,6 +73,8 @@ var helpText = strings.TrimSpace(`
     i                 View images
     D                 System disk usage
     E                 Docker events
+    Space             Toggle select (bulk)
+    Esc               Clear all selections
 
   Volumes view
     x                 Remove volume (confirm)
@@ -88,21 +92,32 @@ var helpText = strings.TrimSpace(`
 
   Logs view
     f                 Toggle follow mode
+    w                 Save logs to file
     j / k             Scroll up/down
     /                 Search in logs
     n                 Next match
     N                 Previous match
 
+  Services view extras
+    .                 Preview .env file
+
   Clipboard
     y                 Copy container ID / project name
     Y                 Copy extended info (Detail view)
+
+  Command mode (:)
+    :q                Quit
+    :theme dark       Switch to dark theme
+    :theme light      Switch to light theme
+    :host             Show Docker host
+    :version          Show version
+    :save [path]      Save logs (in Logs view)
 
   General
     *                 Toggle bookmark (Projects view)
     /                 Filter (search)
     ?                 Show this help
     q                 Quit
-    :q                Quit (vim-style)
 
                       Press ? or Esc to close
 `)

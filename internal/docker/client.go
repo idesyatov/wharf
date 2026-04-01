@@ -211,6 +211,20 @@ func (c *Client) InspectContainer(ctx context.Context, id string) (ContainerDeta
 		networkMode = string(info.HostConfig.NetworkMode)
 	}
 
+	health := HealthCheck{Status: "none"}
+	if info.State.Health != nil {
+		health.Status = info.State.Health.Status
+		health.FailingStreak = info.State.Health.FailingStreak
+		for _, entry := range info.State.Health.Log {
+			health.Log = append(health.Log, HealthLog{
+				Start:    entry.Start,
+				End:      entry.End,
+				ExitCode: entry.ExitCode,
+				Output:   strings.TrimSpace(entry.Output),
+			})
+		}
+	}
+
 	return ContainerDetail{
 		Container: Container{
 			ID:      info.ID[:12],
@@ -229,7 +243,16 @@ func (c *Client) InspectContainer(ctx context.Context, id string) (ContainerDeta
 		Networks:      networks,
 		Cmd:           info.Config.Cmd,
 		Entrypoint:    info.Config.Entrypoint,
+		Health:        health,
 	}, nil
+}
+
+func (c *Client) ContainerHealthStatus(ctx context.Context, id string) string {
+	info, err := c.cli.ContainerInspect(ctx, id)
+	if err != nil || info.State.Health == nil {
+		return "none"
+	}
+	return info.State.Health.Status
 }
 
 func (c *Client) ListImages(ctx context.Context) ([]Image, error) {

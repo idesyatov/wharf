@@ -44,7 +44,11 @@ func main() {
 		ui.ApplyTheme(theme)
 	}
 
-	p := tea.NewProgram(tui.NewApp(cfg), tea.WithAltScreen())
+	opts := []tea.ProgramOption{tea.WithAltScreen()}
+	if cfg.Mouse {
+		opts = append(opts, tea.WithMouseCellMotion())
+	}
+	p := tea.NewProgram(tui.NewApp(cfg), opts...)
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)

@@ -8,7 +8,8 @@
 
 A terminal UI for managing Docker Compose stacks. Inspired by [k9s](https://github.com/derailed/k9s).
 
-<!-- TODO: add screenshot/gif -->
+<!-- TODO: generate demo.gif with `vhs demo.tape` or asciinema -->
+<!-- <p align="center"><img src="demo.gif" alt="Wharf Demo" width="800"></p> -->
 
 ## Features
 
@@ -35,6 +36,13 @@ A terminal UI for managing Docker Compose stacks. Inspired by [k9s](https://gith
 
 ## Installation
 
+### Homebrew (macOS/Linux)
+
+```bash
+brew tap idesyatov/tap
+brew install wharf
+```
+
 ### From releases
 
 Download the latest archive from [GitHub Releases](https://github.com/idesyatov/wharf/releases):
@@ -50,6 +58,14 @@ tar xzf wharf-v*.tar.gz
 | macOS Intel | `wharf-vX.X.X-darwin-amd64.tar.gz` |
 | macOS Apple Silicon | `wharf-vX.X.X-darwin-arm64.tar.gz` |
 | Windows amd64 | `wharf-vX.X.X-windows-amd64.zip` |
+
+### Docker
+
+```bash
+docker run -it --rm \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  ghcr.io/idesyatov/wharf
+```
 
 ### From source (requires Docker)
 

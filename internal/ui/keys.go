@@ -42,6 +42,8 @@ type KeyMap struct {
 	OpenBrowser key.Binding
 	Events      key.Binding
 	SystemDf    key.Binding
+	SaveLogs    key.Binding
+	EnvFile     key.Binding
 }
 
 func DefaultKeyMap() KeyMap {
@@ -189,6 +191,14 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("D"),
 			key.WithHelp("D", "system"),
 		),
+		SaveLogs: key.NewBinding(
+			key.WithKeys("w"),
+			key.WithHelp("w", "save logs"),
+		),
+		EnvFile: key.NewBinding(
+			key.WithKeys("."),
+			key.WithHelp(".", "env file"),
+		),
 	}
 }
 
@@ -233,6 +243,8 @@ func ApplyKeyBindings(km KeyMap, bindings map[string]string) KeyMap {
 	apply(&km.OpenBrowser, "open_browser")
 	apply(&km.Events, "events")
 	apply(&km.SystemDf, "system")
+	apply(&km.SaveLogs, "save_logs")
+	apply(&km.EnvFile, "env_file")
 	return km
 }
 

@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -32,6 +33,7 @@ const (
 	viewImages
 	viewEvents
 	viewSystem
+	viewEnv
 	viewHelp
 )
 
@@ -54,6 +56,7 @@ type App struct {
 	imagesView      views.ImagesView
 	eventsView      views.EventsView
 	systemView      views.SystemView
+	envFileView     views.EnvFileView
 	helpView        views.HelpView
 	events          []docker.Event
 	eventsNew       int
@@ -67,7 +70,7 @@ type App struct {
 	notification    string
 	notificationErr bool
 	notificationExp time.Time
-	pendingColon    bool
+	cmdMode         CmdMode
 	updateAvailable string
 }
 
@@ -146,6 +149,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.imagesView = a.imagesView.SetSize(msg.Width, msg.Height-7)
 		a.eventsView = a.eventsView.SetSize(msg.Width, msg.Height-7)
 		a.systemView = a.systemView.SetSize(msg.Width, msg.Height-7)
+		a.envFileView = a.envFileView.SetSize(msg.Width, msg.Height-7)
 		a.helpView = a.helpView.SetSize(msg.Width, msg.Height-7)
 		return a, nil
 
@@ -444,6 +448,47 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.notificationExp = time.Now().Add(3 * time.Second)
 		return a, tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
 
+	// --- Logs save ---
+
+	case views.SaveLogsMsg:
+		path := msg.Path
+		if path == "" {
+			home, _ := os.UserHomeDir()
+			dir := filepath.Join(home, "wharf-logs")
+			_ = os.MkdirAll(dir, 0755)
+			path = filepath.Join(dir, a.logsView.ContainerName()+"-"+time.Now().Format("2006-01-02-150405")+".log")
+		}
+		lines := a.logsView.Lines()
+		err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644)
+		if err != nil {
+			a.notification = "save: " + err.Error()
+			a.notificationErr = true
+		} else {
+			a.notification = fmt.Sprintf("Saved %d lines → %s", len(lines), path)
+			a.notificationErr = false
+		}
+		a.notificationExp = time.Now().Add(3 * time.Second)
+		return a, tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+
+	// --- Env file ---
+
+	case views.SwitchToEnvMsg:
+		a.prevState = a.state
+		a.state = viewEnv
+		a.envFileView = views.NewEnvFileView(msg.ProjectName, msg.ProjectPath).SetSize(a.width, a.height-5)
+		if a.envFileView.FileName() == "" {
+			a.state = a.prevState
+			a.notification = "No .env file found"
+			a.notificationErr = false
+			a.notificationExp = time.Now().Add(2 * time.Second)
+			return a, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+		}
+		return a, nil
+
+	case views.SwitchBackFromEnvMsg:
+		a.state = a.prevState
+		return a, nil
+
 	case views.SwitchToHelpMsg:
 		a.prevState = a.state
 		a.state = viewHelp
@@ -480,6 +525,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if a.state == viewServices {
 			cmds = append(cmds, views.LoadStats(a.docker, a.servicesView.Project()))
+			cmds = append(cmds, views.LoadHealth(a.docker, a.servicesView.Project()))
 		}
 		return a, tea.Batch(cmds...)
 
@@ -488,6 +534,16 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	// --- Compose ---
+
+	case views.BatchActionMsg:
+		a.notification = fmt.Sprintf("compose %s: %d projects...", msg.Action, len(msg.Projects))
+		a.notificationErr = false
+		a.notificationExp = time.Now().Add(30 * time.Second)
+		return a, a.executeBatchCompose(msg.Action, msg.Projects)
+
+	case views.HealthLoadedMsg:
+		a.servicesView = a.servicesView.UpdateHealth(msg.Health)
+		return a, nil
 
 	case views.ComposeUpMsg:
 		return a, a.executeCompose("up", msg.ProjectName, msg.ProjectPath)
@@ -568,24 +624,29 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// --- Quit ---
 
 	case tea.KeyMsg:
+		// Command mode input
+		if a.cmdMode.IsActive() {
+			switch msg.Type {
+			case tea.KeyEnter:
+				cmd := a.cmdMode.Execute()
+				return a, a.executeCommand(cmd)
+			case tea.KeyEsc:
+				a.cmdMode.Cancel()
+				return a, nil
+			default:
+				a.cmdMode.HandleKey(msg)
+				return a, nil
+			}
+		}
+
 		// In filter mode, don't intercept keys
 		if a.isFilterMode() {
 			break
 		}
 
-		// Handle :q sequence
-		if a.pendingColon {
-			a.pendingColon = false
-			if msg.String() == "q" {
-				a.cleanup()
-				return a, tea.Quit
-			}
-			break
-		}
-
 		switch {
 		case msg.String() == ":":
-			a.pendingColon = true
+			a.cmdMode.Enter()
 			return a, nil
 		case ui.MatchKey(msg, a.keys.Quit):
 			a.cleanup()
@@ -619,6 +680,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.eventsView, cmd = a.eventsView.Update(msg, a.keys)
 	case viewSystem:
 		a.systemView, cmd = a.systemView.Update(msg, a.keys)
+	case viewEnv:
+		a.envFileView, cmd = a.envFileView.Update(msg, a.keys)
 	case viewHelp:
 		a.helpView, cmd = a.helpView.Update(msg, a.keys)
 	}
@@ -688,27 +751,29 @@ func (a App) renderBreadcrumbs() string {
 	var crumb string
 	switch a.state {
 	case viewProjects:
-		crumb = ""
+		crumb = a.projectsView.Breadcrumb()
 	case viewServices:
-		crumb = "› " + a.servicesView.ProjectName()
+		crumb = a.servicesView.Breadcrumb()
 	case viewDetail:
-		crumb = "› " + a.detailView.ProjectName() + " › " + a.detailView.ServiceName()
+		crumb = a.detailView.Breadcrumb()
 	case viewLogs:
-		crumb = "› " + a.servicesView.ProjectName() + " › " + a.logsView.ContainerName() + " [LOGS]"
+		crumb = a.logsView.Breadcrumb()
 	case viewCompose:
-		crumb = "› " + a.composeView.ProjectName() + " › " + a.composeView.FileName()
+		crumb = a.composeView.Breadcrumb()
 	case viewVolumes:
-		crumb = "› " + a.volumesView.ProjectName() + " › Volumes"
+		crumb = a.volumesView.Breadcrumb()
 	case viewNetworks:
-		crumb = "› " + a.networksView.ProjectName() + " › Networks"
+		crumb = a.networksView.Breadcrumb()
 	case viewImages:
-		crumb = "› Images"
+		crumb = a.imagesView.Breadcrumb()
 	case viewEvents:
-		crumb = "› Events"
+		crumb = a.eventsView.Breadcrumb()
 	case viewSystem:
-		crumb = "› System"
+		crumb = a.systemView.Breadcrumb()
+	case viewEnv:
+		crumb = a.envFileView.Breadcrumb()
 	case viewHelp:
-		crumb = "Help"
+		crumb = a.helpView.Breadcrumb()
 	}
 
 	style := lipgloss.NewStyle().
@@ -731,39 +796,49 @@ func (a App) renderMenuBar() string {
 
 	switch a.state {
 	case viewProjects:
-		actionsLine = joinMenuItems(
-			ui.FormatMenuItem("u", " compose up"),
-			ui.FormatMenuItem("d", " compose stop"),
-			ui.FormatMenuItem("X", " compose down"),
-			ui.FormatMenuItem("R", " compose restart"),
-		)
-		toolsLine = joinMenuItems(
-			ui.FormatMenuItem("i", "mages"),
-			ui.FormatMenuItem("E", "vents"),
-			ui.FormatMenuItem("D", "isk usage"),
-			ui.FormatMenuItem("*", "mark"),
-			ui.FormatMenuItem("/", "filter"),
-			ui.FormatMenuItem("?", "help"),
-		)
+		if a.projectsView.HasSelected() {
+			actionsLine = joinMenuItems(
+				fmt.Sprintf("%d selected", a.projectsView.SelectedCount()),
+				ui.FormatMenuItem("u", "p all"),
+				ui.FormatMenuItem("d", " stop all"),
+				ui.FormatMenuItem("X", " down all"),
+				ui.FormatMenuItem("R", " restart all"),
+				ui.FormatMenuItem("Esc", " clear"),
+			)
+			toolsLine = joinMenuItems(
+				ui.FormatMenuItem("Space", " toggle"),
+			)
+		} else {
+			actionsLine = joinMenuItems(
+				ui.FormatMenuItem("u", " compose up"),
+				ui.FormatMenuItem("d", " compose stop"),
+				ui.FormatMenuItem("X", " compose down"),
+				ui.FormatMenuItem("R", " compose restart"),
+			)
+			toolsLine = joinMenuItems(
+				ui.FormatMenuItem("i", "mages"),
+				ui.FormatMenuItem("E", "vents"),
+				ui.FormatMenuItem("D", "isk usage"),
+				ui.FormatMenuItem("*", "mark"),
+				ui.FormatMenuItem("/", "filter"),
+				ui.FormatMenuItem("?", "help"),
+			)
+		}
 	case viewServices:
 		actionsLine = joinMenuItems(
 			ui.FormatMenuItem("s", "tart"),
 			ui.FormatMenuItem("S", "top"),
 			ui.FormatMenuItem("r", "estart"),
 			ui.FormatMenuItem("e", "xec"),
-			ui.FormatMenuItem("u", " compose up"),
-			ui.FormatMenuItem("d", " compose stop"),
-			ui.FormatMenuItem("X", " compose down"),
-			ui.FormatMenuItem("R", " compose restart"),
+			ui.FormatMenuItem("L", "ogs"),
 		)
 		toolsLine = joinMenuItems(
 			ui.FormatMenuItem("b", "uild"),
-			ui.FormatMenuItem("L", "ogs"),
 			ui.FormatMenuItem("c", "ompose"),
 			ui.FormatMenuItem("v", "ol"),
 			ui.FormatMenuItem("n", "et"),
-			ui.FormatMenuItem("o", "pen"),
 			ui.FormatMenuItem("/", "filter"),
+			ui.FormatMenuItem("?", "help"),
 		)
 	case viewDetail:
 		actionsLine = joinMenuItems(
@@ -775,6 +850,7 @@ func (a App) renderMenuBar() string {
 	case viewLogs:
 		actionsLine = joinMenuItems(
 			ui.FormatMenuItem("f", "ollow"),
+			ui.FormatMenuItem("w", "save"),
 		)
 	case viewVolumes:
 		actionsLine = joinMenuItems(
@@ -840,6 +916,8 @@ func (a App) renderContent() string {
 			viewContent = a.eventsView.View()
 		case viewSystem:
 			viewContent = a.systemView.View()
+		case viewEnv:
+			viewContent = a.envFileView.View()
 		case viewHelp:
 			viewContent = a.helpView.View()
 		}
@@ -852,8 +930,8 @@ func (a App) renderContent() string {
 }
 
 func (a App) renderStatusLine() string {
-	if a.pendingColon {
-		return ui.CommandStyle.Render(":")
+	if a.cmdMode.IsActive() {
+		return ui.CommandStyle.Render(":" + a.cmdMode.Input() + "█")
 	}
 
 	if a.notification != "" && time.Now().Before(a.notificationExp) {
@@ -945,6 +1023,102 @@ func (a App) executeCompose(action, projectName, projectPath string) tea.Cmd {
 			Action:      action,
 			ProjectName: projectName,
 		}
+	}
+}
+
+func (a App) executeBatchCompose(action string, projects []docker.Project) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		var errors []string
+		for _, p := range projects {
+			var err error
+			switch action {
+			case "up":
+				err = docker.ComposeUp(ctx, p.Path)
+			case "stop":
+				err = docker.ComposeStop(ctx, p.Path)
+			case "down":
+				err = docker.ComposeDown(ctx, p.Path)
+			case "restart":
+				err = docker.ComposeRestart(ctx, p.Path)
+			}
+			if err != nil {
+				errors = append(errors, p.Name+": "+err.Error())
+			}
+		}
+		if len(errors) > 0 {
+			return views.ComposeResultMsg{
+				Err:         fmt.Errorf("%s", strings.Join(errors, "; ")),
+				Action:      action,
+				ProjectName: fmt.Sprintf("%d projects", len(projects)),
+			}
+		}
+		return views.ComposeResultMsg{
+			Action:      action,
+			ProjectName: fmt.Sprintf("%d projects", len(projects)),
+		}
+	}
+}
+
+func (a *App) executeCommand(cmd string) tea.Cmd {
+	parts := strings.Fields(cmd)
+	if len(parts) == 0 {
+		return nil
+	}
+
+	switch parts[0] {
+	case "q":
+		a.cleanup()
+		return tea.Quit
+	case "host":
+		host := "local"
+		if dh := os.Getenv("DOCKER_HOST"); dh != "" {
+			host = dh
+		}
+		a.notification = "Docker host: " + host
+		a.notificationErr = false
+		a.notificationExp = time.Now().Add(3 * time.Second)
+		return tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+	case "theme":
+		if len(parts) < 2 {
+			a.notification = "Usage: :theme dark|light"
+			a.notificationErr = true
+			a.notificationExp = time.Now().Add(3 * time.Second)
+			return tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+		}
+		theme, err := ui.LoadTheme(parts[1])
+		if err != nil {
+			a.notification = "Theme error: " + err.Error()
+			a.notificationErr = true
+		} else {
+			ui.ApplyTheme(theme)
+			a.notification = "Theme: " + parts[1]
+			a.notificationErr = false
+		}
+		a.notificationExp = time.Now().Add(2 * time.Second)
+		return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+	case "version":
+		a.notification = "wharf " + version.Full()
+		a.notificationErr = false
+		a.notificationExp = time.Now().Add(3 * time.Second)
+		return tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+	case "save":
+		if a.state == viewLogs {
+			path := ""
+			if len(parts) > 1 {
+				path = parts[1]
+			}
+			return func() tea.Msg { return views.SaveLogsMsg{Path: path} }
+		}
+		a.notification = "save: only available in Logs view"
+		a.notificationErr = true
+		a.notificationExp = time.Now().Add(2 * time.Second)
+		return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+	default:
+		a.notification = "Unknown command: " + cmd
+		a.notificationErr = true
+		a.notificationExp = time.Now().Add(2 * time.Second)
+		return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
 	}
 }
 

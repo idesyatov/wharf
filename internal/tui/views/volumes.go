@@ -45,6 +45,7 @@ func (v VolumesView) SetSize(w, h int) VolumesView {
 	return v
 }
 
+func (v VolumesView) Breadcrumb() string     { return "› " + v.projectName + " › Volumes" }
 func (v VolumesView) ProjectName() string    { return v.projectName }
 func (v VolumesView) PendingRemove() bool    { return v.pendingRemove }
 func (v VolumesView) PendingPrune() bool     { return v.pendingPrune }
@@ -78,6 +79,25 @@ func (v VolumesView) Update(msg tea.Msg, keys ui.KeyMap) (VolumesView, tea.Cmd) 
 		v.volumes = msg.Volumes
 		if v.cursor >= len(v.volumes) && len(v.volumes) > 0 {
 			v.cursor = len(v.volumes) - 1
+		}
+		return v, nil
+
+	case tea.MouseMsg:
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			row := msg.Y - 4
+			if row >= 0 && row < len(v.volumes) {
+				v.cursor = row
+			}
+		}
+		if msg.Button == tea.MouseButtonWheelDown {
+			if v.cursor < len(v.volumes)-1 {
+				v.cursor++
+			}
+		}
+		if msg.Button == tea.MouseButtonWheelUp {
+			if v.cursor > 0 {
+				v.cursor--
+			}
 		}
 		return v, nil
 

@@ -43,6 +43,7 @@ func (v ImagesView) SetSize(w, h int) ImagesView {
 	return v
 }
 
+func (v ImagesView) Breadcrumb() string { return "› Images" }
 func (v ImagesView) PendingPrune() bool { return v.pendingPrune }
 
 func LoadImages(client *docker.Client) tea.Cmd {
@@ -89,6 +90,25 @@ func (v ImagesView) Update(msg tea.Msg, keys ui.KeyMap) (ImagesView, tea.Cmd) {
 		v.images = msg.Images
 		if v.cursor >= len(v.images) && len(v.images) > 0 {
 			v.cursor = len(v.images) - 1
+		}
+		return v, nil
+
+	case tea.MouseMsg:
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			row := msg.Y - 4
+			if row >= 0 && row < len(v.images) {
+				v.cursor = row
+			}
+		}
+		if msg.Button == tea.MouseButtonWheelDown {
+			if v.cursor < len(v.images)-1 {
+				v.cursor++
+			}
+		}
+		if msg.Button == tea.MouseButtonWheelUp {
+			if v.cursor > 0 {
+				v.cursor--
+			}
 		}
 		return v, nil
 

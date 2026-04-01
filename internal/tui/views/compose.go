@@ -51,6 +51,10 @@ func NewComposeView(projectName, projectPath string) ComposeView {
 	return v
 }
 
+func (v ComposeView) Breadcrumb() string {
+	return "› " + v.projectName + " › " + v.fileName
+}
+
 func (v ComposeView) FileName() string {
 	return v.fileName
 }

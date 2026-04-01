@@ -17,6 +17,7 @@ type Config struct {
 	Bookmarks    []string          `yaml:"bookmarks"`
 	Theme        string            `yaml:"theme"`
 	DockerHost   string            `yaml:"docker_host"`
+	Mouse        bool              `yaml:"mouse"`
 }
 
 func Default() *Config {

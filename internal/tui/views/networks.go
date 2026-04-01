@@ -35,6 +35,7 @@ func (v NetworksView) SetSize(w, h int) NetworksView {
 	return v
 }
 
+func (v NetworksView) Breadcrumb() string  { return "› " + v.projectName + " › Networks" }
 func (v NetworksView) ProjectName() string { return v.projectName }
 
 func LoadNetworks(client *docker.Client, projectName string) tea.Cmd {
@@ -65,6 +66,27 @@ func (v NetworksView) Update(msg tea.Msg, keys ui.KeyMap) (NetworksView, tea.Cmd
 		v.networks = msg.Networks
 		if v.cursor >= len(v.networks) && len(v.networks) > 0 {
 			v.cursor = len(v.networks) - 1
+		}
+		return v, nil
+
+	case tea.MouseMsg:
+		if !v.detail {
+			if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+				row := msg.Y - 4
+				if row >= 0 && row < len(v.networks) {
+					v.cursor = row
+				}
+			}
+			if msg.Button == tea.MouseButtonWheelDown {
+				if v.cursor < len(v.networks)-1 {
+					v.cursor++
+				}
+			}
+			if msg.Button == tea.MouseButtonWheelUp {
+				if v.cursor > 0 {
+					v.cursor--
+				}
+			}
 		}
 		return v, nil
 

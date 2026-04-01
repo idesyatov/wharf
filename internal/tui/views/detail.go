@@ -33,6 +33,10 @@ func NewDetailView(svc docker.Service) DetailView {
 	}
 }
 
+func (v DetailView) Breadcrumb() string {
+	return "› " + v.service.Project + " › " + v.service.Name
+}
+
 func (v DetailView) ServiceName() string {
 	return v.service.Name
 }
@@ -232,6 +236,25 @@ func (v DetailView) buildSections() []string {
 	}
 	if len(d.Entrypoint) > 0 {
 		lines = append(lines, fmt.Sprintf("  %-14s %s", "Entrypoint", strings.Join(d.Entrypoint, " ")))
+	}
+
+	if d.Health.Status != "none" {
+		lines = append(lines, "")
+		status := d.Health.Status
+		if d.Health.FailingStreak > 0 {
+			status += fmt.Sprintf(" (failing streak: %d)", d.Health.FailingStreak)
+		}
+		lines = append(lines, "  Health Check")
+		lines = append(lines, fmt.Sprintf("    Status: %s", status))
+		showLogs := d.Health.Log
+		if len(showLogs) > 3 {
+			showLogs = showLogs[len(showLogs)-3:]
+		}
+		for _, entry := range showLogs {
+			lines = append(lines, fmt.Sprintf("    %s  exit=%d  %s",
+				entry.Start.Format("15:04:05"), entry.ExitCode,
+				truncate(entry.Output, 60)))
+		}
 	}
 
 	return lines

@@ -7,98 +7,47 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
 
-      - name: Build Linux
-        env:
-          CGO_ENABLED: 0
-          GOOS: linux
-          GOARCH: amd64
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/}
-          COMMIT=$(git rev-parse --short HEAD)
-          BUILD_DATE=$(date -u +%Y-%m-%d)
-          go build -ldflags "-s -w -X github.com/idesyatov/wharf/internal/version.Version=$VERSION -X github.com/idesyatov/wharf/internal/version.Commit=$COMMIT -X github.com/idesyatov/wharf/internal/version.BuildDate=$BUILD_DATE" -o wharf ./cmd/wharf
-
-      - name: Build macOS amd64
-        env:
-          CGO_ENABLED: 0
-          GOOS: darwin
-          GOARCH: amd64
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/}
-          COMMIT=$(git rev-parse --short HEAD)
-          BUILD_DATE=$(date -u +%Y-%m-%d)
-          go build -ldflags "-s -w -X github.com/idesyatov/wharf/internal/version.Version=$VERSION -X github.com/idesyatov/wharf/internal/version.Commit=$COMMIT -X github.com/idesyatov/wharf/internal/version.BuildDate=$BUILD_DATE" -o wharf-darwin-amd64 ./cmd/wharf
-
-      - name: Build macOS arm64
-        env:
-          CGO_ENABLED: 0
-          GOOS: darwin
-          GOARCH: arm64
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/}
-          COMMIT=$(git rev-parse --short HEAD)
-          BUILD_DATE=$(date -u +%Y-%m-%d)
-          go build -ldflags "-s -w -X github.com/idesyatov/wharf/internal/version.Version=$VERSION -X github.com/idesyatov/wharf/internal/version.Commit=$COMMIT -X github.com/idesyatov/wharf/internal/version.BuildDate=$BUILD_DATE" -o wharf-darwin-arm64 ./cmd/wharf
-
-      - name: Build Windows
-        env:
-          CGO_ENABLED: 0
-          GOOS: windows
-          GOARCH: amd64
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/}
-          COMMIT=$(git rev-parse --short HEAD)
-          BUILD_DATE=$(date -u +%Y-%m-%d)
-          go build -ldflags "-s -w -X github.com/idesyatov/wharf/internal/version.Version=$VERSION -X github.com/idesyatov/wharf/internal/version.Commit=$COMMIT -X github.com/idesyatov/wharf/internal/version.BuildDate=$BUILD_DATE" -o wharf.exe ./cmd/wharf
-
-      - name: Package archives
-        run: |
-          TAG=${GITHUB_REF#refs/tags/}
-
-          # Linux amd64: tar.gz
-          mkdir -p wharf-${TAG}-linux-amd64
-          cp wharf wharf-${TAG}-linux-amd64/
-          cp LICENSE wharf-${TAG}-linux-amd64/ 2>/dev/null || true
-          cp README.md wharf-${TAG}-linux-amd64/
-          tar czf wharf-${TAG}-linux-amd64.tar.gz wharf-${TAG}-linux-amd64/
-
-          # macOS amd64: tar.gz
-          mkdir -p wharf-${TAG}-darwin-amd64
-          cp wharf-darwin-amd64 wharf-${TAG}-darwin-amd64/wharf
-          cp LICENSE wharf-${TAG}-darwin-amd64/ 2>/dev/null || true
-          cp README.md wharf-${TAG}-darwin-amd64/
-          tar czf wharf-${TAG}-darwin-amd64.tar.gz wharf-${TAG}-darwin-amd64/
-
-          # macOS arm64: tar.gz
-          mkdir -p wharf-${TAG}-darwin-arm64
-          cp wharf-darwin-arm64 wharf-${TAG}-darwin-arm64/wharf
-          cp LICENSE wharf-${TAG}-darwin-arm64/ 2>/dev/null || true
-          cp README.md wharf-${TAG}-darwin-arm64/
-          tar czf wharf-${TAG}-darwin-arm64.tar.gz wharf-${TAG}-darwin-arm64/
-
-          # Windows amd64: zip
-          mkdir -p wharf-${TAG}-windows-amd64
-          cp wharf.exe wharf-${TAG}-windows-amd64/
-          cp LICENSE wharf-${TAG}-windows-amd64/ 2>/dev/null || true
-          cp README.md wharf-${TAG}-windows-amd64/
-          zip -r wharf-${TAG}-windows-amd64.zip wharf-${TAG}-windows-amd64/
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
+      - uses: goreleaser/goreleaser-action@v6
         with:
-          files: |
-            wharf-*.tar.gz
-            wharf-*.zip
-          generate_release_notes: true
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v5
+        with:
+          push: true
+          tags: |
+            ghcr.io/idesyatov/wharf:latest
+            ghcr.io/idesyatov/wharf:${{ github.ref_name }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}

@@ -43,6 +43,10 @@ type StatsLoadedMsg struct {
 	Stats map[string]docker.Stats
 }
 
+type HealthLoadedMsg struct {
+	Health map[string]string
+}
+
 type ServicesView struct {
 	project         docker.Project
 	cursor          int
@@ -52,6 +56,7 @@ type ServicesView struct {
 	filterMode      bool
 	filterText      string
 	stats           map[string]docker.Stats
+	health          map[string]string
 	sortColumn      int
 	sortReverse     bool
 	pendingDown     bool
@@ -72,6 +77,7 @@ func (v ServicesView) SetSize(w, h int) ServicesView {
 }
 
 func (v ServicesView) Project() docker.Project   { return v.project }
+func (v ServicesView) Breadcrumb() string         { return "› " + v.project.Name }
 func (v ServicesView) ProjectName() string       { return v.project.Name }
 func (v ServicesView) ProjectPath() string      { return v.project.Path }
 func (v ServicesView) FilterMode() bool         { return v.filterMode }
@@ -81,6 +87,11 @@ func (v ServicesView) PendingDownName() string   { return v.pendingDownName }
 
 func (v ServicesView) UpdateStats(stats map[string]docker.Stats) ServicesView {
 	v.stats = stats
+	return v
+}
+
+func (v ServicesView) UpdateHealth(health map[string]string) ServicesView {
+	v.health = health
 	return v
 }
 
@@ -103,6 +114,25 @@ func LoadStats(client *docker.Client, project docker.Project) tea.Cmd {
 			}
 		}
 		return StatsLoadedMsg{Stats: result}
+	}
+}
+
+func LoadHealth(client *docker.Client, project docker.Project) tea.Cmd {
+	return func() tea.Msg {
+		if client == nil {
+			return HealthLoadedMsg{}
+		}
+		ctx := context.Background()
+		result := make(map[string]string)
+		for _, svc := range project.Services {
+			for _, ct := range svc.Containers {
+				if ct.Status != "running" {
+					continue
+				}
+				result[ct.ID] = client.ContainerHealthStatus(ctx, ct.ID)
+			}
+		}
+		return HealthLoadedMsg{Health: result}
 	}
 }
 
@@ -206,6 +236,30 @@ func (v ServicesView) Update(msg tea.Msg, keys ui.KeyMap) (ServicesView, tea.Cmd
 		v.stats = msg.Stats
 		return v, nil
 
+	case HealthLoadedMsg:
+		v.health = msg.Health
+		return v, nil
+
+	case tea.MouseMsg:
+		filtered := v.filtered()
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			row := msg.Y - 5 // info + breadcrumbs + title + header
+			if row >= 0 && row < len(filtered) {
+				v.cursor = row
+			}
+		}
+		if msg.Button == tea.MouseButtonWheelDown {
+			if v.cursor < len(filtered)-1 {
+				v.cursor++
+			}
+		}
+		if msg.Button == tea.MouseButtonWheelUp {
+			if v.cursor > 0 {
+				v.cursor--
+			}
+		}
+		return v, nil
+
 	case tea.KeyMsg:
 		if v.filterMode {
 			switch msg.Type {
@@ -298,22 +352,6 @@ func (v ServicesView) Update(msg tea.Msg, keys ui.KeyMap) (ServicesView, tea.Cmd
 			if svc, ok := v.selectedService(); ok && len(svc.Containers) > 0 {
 				return v, func() tea.Msg { return SwitchToLogsMsg{Container: svc.Containers[0]} }
 			}
-		case ui.MatchKey(msg, keys.ComposeUp):
-			return v, func() tea.Msg {
-				return ComposeUpMsg{ProjectPath: v.project.Path, ProjectName: v.project.Name}
-			}
-		case ui.MatchKey(msg, keys.ComposeStop):
-			return v, func() tea.Msg {
-				return ComposeStopMsg{ProjectPath: v.project.Path, ProjectName: v.project.Name}
-			}
-		case ui.MatchKey(msg, keys.ComposeDown):
-			v.pendingDown = true
-			v.pendingDownName = v.project.Name
-			v.pendingDownPath = v.project.Path
-		case ui.MatchKey(msg, keys.ComposeRestart):
-			return v, func() tea.Msg {
-				return ComposeRestartMsg{ProjectPath: v.project.Path, ProjectName: v.project.Name}
-			}
 		case ui.MatchKey(msg, keys.Compose):
 			return v, func() tea.Msg {
 				return SwitchToComposeMsg{ProjectName: v.project.Name, ProjectPath: v.project.Path}
@@ -351,15 +389,9 @@ func (v ServicesView) Update(msg tea.Msg, keys ui.KeyMap) (ServicesView, tea.Cmd
 				id := svc.Containers[0].ID
 				return v, func() tea.Msg { return CopyMsg{Text: id, Label: id} }
 			}
-		case ui.MatchKey(msg, keys.OpenBrowser):
-			if svc, ok := v.selectedService(); ok {
-				url := firstHTTPPort(svc)
-				if url != "" {
-					return v, func() tea.Msg { return OpenBrowserMsg{URL: url} }
-				}
-				return v, func() tea.Msg {
-					return CopyMsg{Text: "", Label: "No exposed ports"}
-				}
+		case ui.MatchKey(msg, keys.EnvFile):
+			return v, func() tea.Msg {
+				return SwitchToEnvMsg{ProjectName: v.project.Name, ProjectPath: v.project.Path}
 			}
 		case msg.String() >= "1" && msg.String() <= "6":
 			col := int(msg.String()[0]-'0') - 1
@@ -394,12 +426,13 @@ func (v ServicesView) View() string {
 	}
 
 	colName := 18
-	colStatus := 12
+	colStatus := 10
+	colHealth := 2
 	colCPU := 8
 	colMem := 12
 	colImage := 25
 
-	cols := []string{"SERVICE", "STATUS", "CPU", "MEM", "IMAGE", "PORTS"}
+	cols := []string{"SERVICE", "STATUS", "H", "CPU", "MEM", "IMAGE", "PORTS"}
 	for i := range cols {
 		if i == v.sortColumn {
 			if v.sortReverse {
@@ -411,10 +444,10 @@ func (v ServicesView) View() string {
 	}
 
 	header := ui.HeaderRowStyle.Render(
-		fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s %s",
-			colName, cols[0], colStatus, cols[1],
-			colCPU, cols[2], colMem, cols[3],
-			colImage, cols[4], cols[5]),
+		fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s %-*s %s",
+			colName, cols[0], colStatus, cols[1], colHealth, cols[2],
+			colCPU, cols[3], colMem, cols[4],
+			colImage, cols[5], cols[6]),
 	)
 
 	var rows []string
@@ -425,9 +458,10 @@ func (v ServicesView) View() string {
 		cpu, mem := v.svcStats(svc)
 
 		if i == v.cursor {
-			plainRow := fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s %s",
+			plainRow := fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s %-*s %s",
 				colName, truncate(svc.Name, colName),
 				colStatus, statusTextPlain(svc.Status),
+				colHealth, svcHealthPlain(v.health, svc),
 				colCPU, cpu,
 				colMem, mem,
 				colImage, truncate(svc.Image, colImage),
@@ -438,9 +472,11 @@ func (v ServicesView) View() string {
 		}
 
 		statusStr := statusText(svc.Status)
-		row := fmt.Sprintf("%-*s %s %-*s %-*s %-*s %s",
+		healthStr := v.svcHealthIndicator(svc)
+		row := fmt.Sprintf("%-*s %s %s %-*s %-*s %-*s %s",
 			colName, truncate(svc.Name, colName),
 			padRight(statusStr, colStatus),
+			padRight(healthStr, colHealth),
 			colCPU, cpu,
 			colMem, mem,
 			colImage, truncate(svc.Image, colImage),
@@ -473,6 +509,44 @@ func (v ServicesView) svcStats(svc docker.Service) (string, string) {
 		return "-", "-"
 	}
 	return formatCPU(totalCPU), formatMemory(totalMem)
+}
+
+func (v ServicesView) svcHealthIndicator(svc docker.Service) string {
+	if v.health == nil {
+		return ui.MutedStyle.Render("-")
+	}
+	for _, ct := range svc.Containers {
+		if s, ok := v.health[ct.ID]; ok {
+			switch s {
+			case "healthy":
+				return ui.RunningStyle.Render("●")
+			case "unhealthy":
+				return ui.ErrorStyle.Render("✕")
+			case "starting":
+				return ui.PartialStyle.Render("◌")
+			}
+		}
+	}
+	return ui.MutedStyle.Render("-")
+}
+
+func svcHealthPlain(health map[string]string, svc docker.Service) string {
+	if health == nil {
+		return "-"
+	}
+	for _, ct := range svc.Containers {
+		if s, ok := health[ct.ID]; ok {
+			switch s {
+			case "healthy":
+				return "●"
+			case "unhealthy":
+				return "✕"
+			case "starting":
+				return "◌"
+			}
+		}
+	}
+	return "-"
 }
 
 func formatCPU(percent float64) string {

@@ -1,0 +1,61 @@
+version: 2
+
+project_name: wharf
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - main: ./cmd/wharf
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X github.com/idesyatov/wharf/internal/version.Version={{.Version}}
+      - -X github.com/idesyatov/wharf/internal/version.Commit={{.ShortCommit}}
+      - -X github.com/idesyatov/wharf/internal/version.BuildDate={{.Date}}
+
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+brews:
+  - repository:
+      owner: idesyatov
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/idesyatov/wharf
+    description: Terminal UI for managing Docker Compose stacks
+    license: MIT
+    install: |
+      bin.install "wharf"
+    test: |
+      system "#{bin}/wharf", "--version"

@@ -25,6 +25,8 @@ func NewEventsView(events []docker.Event) EventsView {
 	return EventsView{events: events}
 }
 
+func (v EventsView) Breadcrumb() string { return "› Events" }
+
 func (v EventsView) SetSize(w, h int) EventsView {
 	v.width = w
 	v.height = h

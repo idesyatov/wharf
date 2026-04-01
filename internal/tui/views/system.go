@@ -36,6 +36,7 @@ func (v SystemView) SetSize(w, h int) SystemView {
 	return v
 }
 
+func (v SystemView) Breadcrumb() string { return "› System" }
 func (v SystemView) PendingPrune() bool { return v.pendingPrune }
 
 func LoadSystemDf(client *docker.Client) tea.Cmd {

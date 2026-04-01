@@ -57,6 +57,15 @@ func (v LogsView) SetSize(w, h int) LogsView {
 	return v
 }
 
+type SaveLogsMsg struct{ Path string }
+type LogsSavedMsg struct {
+	Path  string
+	Lines int
+	Err   error
+}
+
+func (v LogsView) Breadcrumb() string { return "› " + v.containerName + " [LOGS]" }
+func (v LogsView) Lines() []string { return v.lines }
 func (v LogsView) SearchMode() bool   { return v.searchMode }
 func (v LogsView) SearchText() string  { return v.searchText }
 func (v LogsView) SearchInfo() string {
@@ -131,6 +140,24 @@ func (v LogsView) Update(msg tea.Msg, keys ui.KeyMap) (LogsView, tea.Cmd) {
 		}
 		return v, nil
 
+	case tea.MouseMsg:
+		visibleLines := v.visibleHeight()
+		if msg.Button == tea.MouseButtonWheelUp {
+			if v.offset < len(v.lines)-visibleLines {
+				v.offset++
+				v.follow = false
+			}
+		}
+		if msg.Button == tea.MouseButtonWheelDown {
+			if v.offset > 0 {
+				v.offset--
+			}
+			if v.offset == 0 {
+				v.follow = true
+			}
+		}
+		return v, nil
+
 	case tea.KeyMsg:
 		// Search input mode
 		if v.searchMode {
@@ -197,6 +224,8 @@ func (v LogsView) Update(msg tea.Msg, keys ui.KeyMap) (LogsView, tea.Cmd) {
 			v.nextSearchHit()
 		case msg.String() == "N":
 			v.prevSearchHit()
+		case ui.MatchKey(msg, keys.SaveLogs):
+			return v, func() tea.Msg { return SaveLogsMsg{Path: ""} }
 		case ui.MatchKey(msg, keys.Left):
 			v.Close()
 			return v, func() tea.Msg { return SwitchBackFromLogsMsg{} }
