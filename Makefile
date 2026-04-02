@@ -12,6 +12,7 @@ LDFLAGS := -s -w \
     -X github.com/idesyatov/wharf/internal/version.Version=$(VERSION) \
     -X github.com/idesyatov/wharf/internal/version.Commit=$(COMMIT) \
     -X github.com/idesyatov/wharf/internal/version.BuildDate=$(BUILD_DATE)
+LINT_INSTALL := go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest 2>/dev/null
 
 # Default target
 .PHONY: all build build-all run test vet lint clean \
@@ -24,13 +25,11 @@ all: vet test build-all
 # Build (requires Go)
 # =============================================================================
 
-# Build for current platform
 build:
 	@echo "Building for current platform..."
 	@mkdir -p $(BUILD_DIR)
 	@go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(APP_NAME) ./cmd/wharf || { echo "Build failed"; exit 1; }
 
-# Cross-compile for all platforms
 build-all:
 	@mkdir -p $(BUILD_DIR)
 	@echo "Building for Linux amd64..."
@@ -43,26 +42,21 @@ build-all:
 	@CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(APP_NAME)-windows-amd64.exe ./cmd/wharf
 	@echo "All binaries built in $(BUILD_DIR)/"
 
-# Run TUI
 run:
 	@go run ./cmd/wharf
 
-# Run tests
 test:
 	@echo "Running tests..."
 	@go test ./... || { echo "Tests failed"; exit 1; }
 
-# Run go vet
 vet:
 	@echo "Running go vet..."
 	@go vet ./... || { echo "Vet failed"; exit 1; }
 
-# Run linter
 lint:
 	@echo "Running linter..."
 	@golangci-lint run || { echo "Lint failed"; exit 1; }
 
-# Remove build artifacts
 clean:
 	@echo "Cleaning up..."
 	@rm -rf $(BUILD_DIR) 2>/dev/null || docker run --rm -v "$(CURDIR)":/app alpine rm -rf /app/bin || echo "Could not remove build directory"
@@ -71,10 +65,8 @@ clean:
 # Docker build (no local Go required)
 # =============================================================================
 
-# Build for Linux amd64 (default Docker target)
 docker-build: docker-build-linux
 
-# Build for Linux amd64
 docker-build-linux:
 	@echo "Building for Linux amd64..."
 	@$(COMPOSE) run --rm -e CGO_ENABLED=0 -e GOOS=linux -e GOARCH=amd64 \
@@ -82,7 +74,6 @@ docker-build-linux:
 		sh -c 'mkdir -p $(BUILD_DIR) && go build $(BUILDFLAGS) -ldflags "-s -w -X github.com/idesyatov/wharf/internal/version.Version=$$VERSION -X github.com/idesyatov/wharf/internal/version.Commit=$$COMMIT -X github.com/idesyatov/wharf/internal/version.BuildDate=$$BUILD_DATE" -o $(BUILD_DIR)/$(APP_NAME)-linux-amd64 ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 755 $(BUILD_DIR)/*' \
 		|| { echo "Build failed"; exit 1; }
 
-# Build for macOS amd64 (Intel)
 docker-build-darwin-amd64:
 	@echo "Building for Darwin amd64..."
 	@$(COMPOSE) run --rm -e CGO_ENABLED=0 -e GOOS=darwin -e GOARCH=amd64 \
@@ -90,7 +81,6 @@ docker-build-darwin-amd64:
 		sh -c 'mkdir -p $(BUILD_DIR) && go build $(BUILDFLAGS) -ldflags "-s -w -X github.com/idesyatov/wharf/internal/version.Version=$$VERSION -X github.com/idesyatov/wharf/internal/version.Commit=$$COMMIT -X github.com/idesyatov/wharf/internal/version.BuildDate=$$BUILD_DATE" -o $(BUILD_DIR)/$(APP_NAME)-darwin-amd64 ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 755 $(BUILD_DIR)/*' \
 		|| { echo "Build failed"; exit 1; }
 
-# Build for macOS arm64 (Apple Silicon)
 docker-build-darwin-arm64:
 	@echo "Building for Darwin arm64..."
 	@$(COMPOSE) run --rm -e CGO_ENABLED=0 -e GOOS=darwin -e GOARCH=arm64 \
@@ -98,7 +88,6 @@ docker-build-darwin-arm64:
 		sh -c 'mkdir -p $(BUILD_DIR) && go build $(BUILDFLAGS) -ldflags "-s -w -X github.com/idesyatov/wharf/internal/version.Version=$$VERSION -X github.com/idesyatov/wharf/internal/version.Commit=$$COMMIT -X github.com/idesyatov/wharf/internal/version.BuildDate=$$BUILD_DATE" -o $(BUILD_DIR)/$(APP_NAME)-darwin-arm64 ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 755 $(BUILD_DIR)/*' \
 		|| { echo "Build failed"; exit 1; }
 
-# Build for Windows amd64
 docker-build-windows:
 	@echo "Building for Windows amd64..."
 	@$(COMPOSE) run --rm -e CGO_ENABLED=0 -e GOOS=windows -e GOARCH=amd64 \
@@ -106,7 +95,6 @@ docker-build-windows:
 		sh -c 'mkdir -p $(BUILD_DIR) && go build $(BUILDFLAGS) -ldflags "-s -w -X github.com/idesyatov/wharf/internal/version.Version=$$VERSION -X github.com/idesyatov/wharf/internal/version.Commit=$$COMMIT -X github.com/idesyatov/wharf/internal/version.BuildDate=$$BUILD_DATE" -o $(BUILD_DIR)/$(APP_NAME)-windows-amd64.exe ./cmd/wharf && chmod 777 $(BUILD_DIR) && chmod 755 $(BUILD_DIR)/*' \
 		|| { echo "Build failed"; exit 1; }
 
-# Cross-compile for all platforms
 docker-build-all: docker-build-linux docker-build-darwin-amd64 docker-build-darwin-arm64 docker-build-windows
 	@echo "All binaries built in $(BUILD_DIR)/"
 
@@ -114,40 +102,32 @@ docker-build-all: docker-build-linux docker-build-darwin-amd64 docker-build-darw
 # Docker development
 # =============================================================================
 
-# Run TUI in Docker
 docker-run:
 	@$(COMPOSE) run --rm dev go run $(BUILDFLAGS) ./cmd/wharf
 
-# Run tests in Docker
 docker-test:
 	@echo "Running tests..."
 	@$(COMPOSE) run --rm dev go test $(BUILDFLAGS) ./... || { echo "Tests failed"; exit 1; }
 
-# Run go vet in Docker
 docker-vet:
 	@echo "Running go vet..."
 	@$(COMPOSE) run --rm dev go vet ./... || { echo "Vet failed"; exit 1; }
 
-# Run linter in Docker
 docker-lint:
 	@echo "Running linter..."
-	@$(COMPOSE) run --rm dev golangci-lint run || { echo "Lint failed"; exit 1; }
+	@$(COMPOSE) run --rm dev sh -c '$(LINT_INSTALL); golangci-lint run' || { echo "Lint failed"; exit 1; }
 
-# Update dependencies in Docker
 docker-deps:
 	@echo "Updating dependencies..."
 	@$(COMPOSE) run --rm dev go mod tidy
 
-# Open shell in dev container
 docker-shell:
 	@$(COMPOSE) run --rm dev sh
 
-# Integration tests (requires Docker)
 docker-test-integration:
 	@echo "Running integration tests..."
 	@$(COMPOSE) run --rm dev go test -tags integration -v $(BUILDFLAGS) ./internal/docker/ || { echo "Integration tests failed"; exit 1; }
 
-# Remove binaries (via Docker to handle root-owned files) and Docker volumes
 docker-clean:
 	@echo "Cleaning up..."
 	@$(COMPOSE) run --rm dev rm -rf $(BUILD_DIR) 2>/dev/null || true
@@ -158,7 +138,6 @@ docker-clean:
 # Pre-release check
 # =============================================================================
 
-# Run all validations: build + vet + test + lint
 docker-check:
 	@echo "Running pre-release checks..."
 	@echo "=== Build ==="
@@ -171,7 +150,7 @@ docker-check:
 	@$(COMPOSE) run --rm dev go test $(BUILDFLAGS) ./... || { echo "❌ Tests failed"; exit 1; }
 	@echo "✓ Tests OK"
 	@echo "=== Lint ==="
-	@$(COMPOSE) run --rm dev golangci-lint run || { echo "❌ Lint failed"; exit 1; }
+	@$(COMPOSE) run --rm dev sh -c '$(LINT_INSTALL); golangci-lint run' || { echo "❌ Lint failed"; exit 1; }
 	@echo "✓ Lint OK"
 	@echo ""
 	@echo "✅ All checks passed — ready to release"
@@ -180,7 +159,6 @@ docker-check:
 # Release
 # =============================================================================
 
-# Tag and push a release (usage: make release VERSION=v0.1.0)
 release: docker-check
 ifndef VERSION
 	$(error VERSION is not set. Usage: make release VERSION=v0.1.0)
