@@ -159,7 +159,7 @@ docker-check:
 # Release
 # =============================================================================
 
-release: docker-check
+release:
 ifndef VERSION
 	$(error VERSION is not set. Usage: make release VERSION=v0.1.0)
 endif
