@@ -49,7 +49,7 @@ changelog:
       - "^test:"
       - "^chore:"
 
-homebrew_casks:
+brews:
   - repository:
       owner: idesyatov
       name: homebrew-tap
@@ -57,3 +57,7 @@ homebrew_casks:
     homepage: https://github.com/idesyatov/wharf
     description: Terminal UI for managing Docker Compose stacks
     license: MIT
+    install: |
+      bin.install "wharf"
+    test: |
+      system "#{bin}/wharf", "--version"
