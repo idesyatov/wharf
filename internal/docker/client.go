@@ -484,6 +484,27 @@ func (c *Client) SystemDiskUsage(ctx context.Context) (SystemDf, error) {
 
 // DetectShell returns the shell to use for exec.
 // Always returns "sh" which is available in virtually all containers.
+func (c *Client) ExecOutput(ctx context.Context, containerID string, cmd []string) (string, error) {
+	execCfg, err := c.cli.ContainerExecCreate(ctx, containerID, types.ExecConfig{
+		Cmd:          cmd,
+		AttachStdout: true,
+		AttachStderr: true,
+	})
+	if err != nil {
+		return "", fmt.Errorf("exec create: %w", err)
+	}
+	resp, err := c.cli.ContainerExecAttach(ctx, execCfg.ID, types.ExecStartCheck{})
+	if err != nil {
+		return "", fmt.Errorf("exec attach: %w", err)
+	}
+	defer resp.Close()
+	data, err := io.ReadAll(resp.Reader)
+	if err != nil {
+		return "", fmt.Errorf("exec read: %w", err)
+	}
+	return string(data), nil
+}
+
 func (c *Client) DetectShell(_ context.Context, _ string) string {
 	return "sh"
 }

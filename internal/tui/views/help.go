@@ -103,6 +103,11 @@ var helpText = strings.TrimSpace(`
   Compose view
     e                 Edit compose file ($EDITOR)
 
+  File Browser
+    F                 Browse container filesystem
+    Enter/l           Open directory or view file
+    h/Esc             Go back / exit file view
+
   Services view extras
     .                 Preview .env file
 
@@ -118,6 +123,7 @@ var helpText = strings.TrimSpace(`
     :version          Show version
     :save [path]      Save logs (in Logs view)
     :edit             Edit compose file (Compose view)
+    :go <name>        Jump to project by name
     :help             Show this help
 
   Custom Commands (from config)

@@ -87,6 +87,7 @@ func (v ProjectsView) PendingDown() bool       { return v.pendingDown }
 func (v ProjectsView) PendingDownName() string { return v.pendingDownName }
 func (v ProjectsView) SelectedCount() int      { return len(v.selected) }
 func (v ProjectsView) HasSelected() bool       { return len(v.selected) > 0 }
+func (v ProjectsView) Projects() []docker.Project { return v.projects }
 
 func LoadProjects(client *docker.Client) tea.Cmd {
 	return func() tea.Msg {

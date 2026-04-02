@@ -418,6 +418,16 @@ func (v ServicesView) handleServiceActions(msg tea.KeyMsg, keys ui.KeyMap, filte
 
 func (v ServicesView) handleServiceTools(msg tea.KeyMsg, keys ui.KeyMap, filtered []docker.Service) (ServicesView, tea.Cmd) {
 	switch {
+	case ui.MatchKey(msg, keys.FileBrowser):
+		if svc, ok := v.selectedService(); ok && len(svc.Containers) > 0 {
+			ct := svc.Containers[0]
+			if ct.Status != "running" {
+				break
+			}
+			return v, func() tea.Msg {
+				return SwitchToFileBrowserMsg{ContainerID: ct.ID, ContainerName: ct.Name}
+			}
+		}
 	case ui.MatchKey(msg, keys.Compose):
 		return v, func() tea.Msg {
 			return SwitchToComposeMsg{ProjectName: v.project.Name, ProjectPath: v.project.Path}

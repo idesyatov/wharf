@@ -36,6 +36,7 @@ const (
 	viewEnv
 	viewHelp
 	viewTop
+	viewFileBrowser
 )
 
 type notificationClearMsg struct{}
@@ -60,6 +61,7 @@ type App struct {
 	envFileView     views.EnvFileView
 	helpView        views.HelpView
 	topView         views.TopView
+	fileBrowserView views.FileBrowserView
 	events          []docker.Event
 	eventsNew       int
 	eventsChan      <-chan docker.Event
@@ -172,6 +174,7 @@ func (a App) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	a.envFileView = a.envFileView.SetSize(msg.Width, h)
 	a.helpView = a.helpView.SetSize(msg.Width, h)
 	a.topView = a.topView.SetSize(msg.Width, h)
+	a.fileBrowserView = a.fileBrowserView.SetSize(msg.Width, h)
 	return a, nil
 }
 
@@ -238,6 +241,8 @@ func (a App) delegateToView(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.helpView, cmd = a.helpView.Update(msg, a.keys)
 	case viewTop:
 		a.topView, cmd = a.topView.Update(msg, a.keys)
+	case viewFileBrowser:
+		a.fileBrowserView, cmd = a.fileBrowserView.Update(msg, a.keys)
 	}
 	return a, cmd
 }
@@ -652,6 +657,30 @@ func (a App) handleFileAndNavMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.topView = a.topView.UpdateStats(msg.Stats)
 		return a, nil
 
+	case views.SwitchToFileBrowserMsg:
+		a.prevState = a.state
+		a.state = viewFileBrowser
+		a.fileBrowserView = views.NewFileBrowserView(msg.ContainerID, msg.ContainerName).SetSize(a.width, a.height-7)
+		return a, views.LoadDirectoryListing(a.docker, msg.ContainerID, "/")
+
+	case views.SwitchBackFromFileBrowserMsg:
+		a.state = a.prevState
+		return a, nil
+
+	case views.FileBrowserListMsg:
+		a.fileBrowserView, _ = a.fileBrowserView.Update(msg, a.keys)
+		return a, nil
+
+	case views.FileBrowserReadMsg:
+		a.fileBrowserView, _ = a.fileBrowserView.Update(msg, a.keys)
+		return a, nil
+
+	case views.FileBrowserNavigateMsg:
+		if msg.IsFile {
+			return a, views.LoadFileContent(a.docker, msg.ContainerID, msg.Path)
+		}
+		return a, views.LoadDirectoryListing(a.docker, msg.ContainerID, msg.Path)
+
 	case views.SwitchToHelpMsg:
 		a.prevState = a.state
 		a.state = viewHelp
@@ -920,6 +949,8 @@ func (a App) renderBreadcrumbs() string {
 		crumb = a.helpView.Breadcrumb()
 	case viewTop:
 		crumb = a.topView.Breadcrumb()
+	case viewFileBrowser:
+		crumb = a.fileBrowserView.Breadcrumb()
 	}
 
 	style := lipgloss.NewStyle().
@@ -981,6 +1012,7 @@ func (a App) renderMenuBar() string {
 		)
 		toolsItems := []string{
 			ui.FormatMenuItem("t", "op"),
+			ui.FormatMenuItem("F", "iles"),
 			ui.FormatMenuItem("b", "uild"),
 			ui.FormatMenuItem("c", "ompose"),
 			ui.FormatMenuItem("v", "ol"),
@@ -996,6 +1028,7 @@ func (a App) renderMenuBar() string {
 		actionsLine = joinMenuItems(
 			ui.FormatMenuItem("L", "ogs"),
 			ui.FormatMenuItem("e", "xec"),
+			ui.FormatMenuItem("F", "iles"),
 			ui.FormatMenuItem("y", "copy"),
 			ui.FormatMenuItem("Y", "copy+"),
 		)
@@ -1078,6 +1111,8 @@ func (a App) renderContent() string {
 			viewContent = a.helpView.View()
 		case viewTop:
 			viewContent = a.topView.View()
+		case viewFileBrowser:
+			viewContent = a.fileBrowserView.View()
 		}
 	}
 
@@ -1301,6 +1336,28 @@ func (a *App) executeCommand(cmd string) tea.Cmd {
 			})
 		}
 		a.notification = "edit: only available in Compose view"
+		a.notificationErr = true
+		a.notificationExp = time.Now().Add(2 * time.Second)
+		return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+	case "go":
+		if len(parts) < 2 {
+			a.notification = "Usage: :go <project-name>"
+			a.notificationErr = true
+			a.notificationExp = time.Now().Add(2 * time.Second)
+			return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+		}
+		query := strings.ToLower(parts[1])
+		for _, p := range a.projectsView.Projects() {
+			if strings.Contains(strings.ToLower(p.Name), query) {
+				a.state = viewServices
+				a.servicesView = views.NewServicesView(p, a.cfg.CustomCommands).SetSize(a.width, a.height-7)
+				a.notification = "→ " + p.Name
+				a.notificationErr = false
+				a.notificationExp = time.Now().Add(2 * time.Second)
+				return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+			}
+		}
+		a.notification = "Project not found: " + parts[1]
 		a.notificationErr = true
 		a.notificationExp = time.Now().Add(2 * time.Second)
 		return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })

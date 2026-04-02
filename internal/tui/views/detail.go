@@ -137,6 +137,15 @@ func (v DetailView) handleKeyMsg(msg tea.KeyMsg, keys ui.KeyMap) (DetailView, te
 			info := fmt.Sprintf("ID: %s\nImage: %s\nStatus: %s", v.detail.ID, v.detail.Image, v.detail.Status)
 			return v, func() tea.Msg { return CopyMsg{Text: info, Label: v.detail.ID} }
 		}
+	case ui.MatchKey(msg, keys.FileBrowser):
+		if len(v.service.Containers) > 0 {
+			ct := v.service.Containers[0]
+			if ct.Status == "running" {
+				return v, func() tea.Msg {
+					return SwitchToFileBrowserMsg{ContainerID: ct.ID, ContainerName: ct.Name}
+				}
+			}
+		}
 	}
 	return v, nil
 }

@@ -46,7 +46,8 @@ type KeyMap struct {
 	SaveLogs       key.Binding
 	EnvFile        key.Binding
 	Edit           key.Binding
-	TopView        key.Binding
+	TopView     key.Binding
+	FileBrowser key.Binding
 }
 
 // DefaultKeyMap returns the default keybindings.
@@ -211,6 +212,10 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("t"),
 			key.WithHelp("t", "resource monitor"),
 		),
+		FileBrowser: key.NewBinding(
+			key.WithKeys("F"),
+			key.WithHelp("F", "file browser"),
+		),
 	}
 }
 
@@ -260,6 +265,7 @@ func ApplyKeyBindings(km KeyMap, bindings map[string]string) KeyMap {
 	apply(&km.EnvFile, "env_file")
 	apply(&km.Edit, "edit")
 	apply(&km.TopView, "top")
+	apply(&km.FileBrowser, "file_browser")
 	return km
 }
 
