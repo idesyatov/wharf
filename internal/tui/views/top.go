@@ -11,8 +11,6 @@ import (
 	"github.com/idesyatov/wharf/internal/ui"
 )
 
-const topHistorySize = 20
-
 type SwitchToTopProjectMsg struct {
 	Project docker.Project
 }
@@ -36,8 +34,6 @@ type TopView struct {
 	image         string
 	project       docker.Project
 	stats         map[string]docker.Stats
-	cpuHistory    map[string][]float64
-	memHistory    map[string][]float64
 	width, height int
 	cursor        int
 	scroll        int
@@ -47,8 +43,6 @@ func NewTopViewProject(project docker.Project) TopView {
 	return TopView{
 		projectName: project.Name,
 		project:     project,
-		cpuHistory:  make(map[string][]float64),
-		memHistory:  make(map[string][]float64),
 	}
 }
 
@@ -57,8 +51,6 @@ func NewTopViewContainer(containerID, containerName, image string) TopView {
 		containerID:   containerID,
 		containerName: containerName,
 		image:         image,
-		cpuHistory:    make(map[string][]float64),
-		memHistory:    make(map[string][]float64),
 	}
 }
 
@@ -82,21 +74,6 @@ func (v TopView) SetSize(w, h int) TopView {
 
 func (v TopView) UpdateStats(stats map[string]docker.Stats) TopView {
 	v.stats = stats
-	for id, s := range stats {
-		cpu := v.cpuHistory[id]
-		cpu = append(cpu, s.CPUPercent)
-		if len(cpu) > topHistorySize {
-			cpu = cpu[len(cpu)-topHistorySize:]
-		}
-		v.cpuHistory[id] = cpu
-
-		mem := v.memHistory[id]
-		mem = append(mem, float64(s.MemUsage))
-		if len(mem) > topHistorySize {
-			mem = mem[len(mem)-topHistorySize:]
-		}
-		v.memHistory[id] = mem
-	}
 	return v
 }
 
@@ -218,42 +195,46 @@ func (v TopView) renderProject() string {
 	return lipgloss.JoinVertical(lipgloss.Left, rows...)
 }
 
+func colorByLevel(value, max float64) lipgloss.Style {
+	pct := value / max * 100
+	switch {
+	case pct < 30:
+		return lipgloss.NewStyle().Foreground(ui.ColorSuccess)
+	case pct < 70:
+		return lipgloss.NewStyle().Foreground(ui.ColorWarning)
+	default:
+		return lipgloss.NewStyle().Foreground(ui.ColorDanger)
+	}
+}
+
 func (v TopView) renderContainer() string {
 	s := v.stats[v.containerID]
 
 	labelStyle := ui.MutedStyle
 	valueStyle := lipgloss.NewStyle().Foreground(ui.ColorPrimary)
-	pad := "            " // alignment padding for sparkline rows
+
+	cpuStyle := colorByLevel(s.CPUPercent, 100)
+
+	memPct := 0.0
+	if s.MemLimit > 0 {
+		memPct = float64(s.MemUsage) / float64(s.MemLimit) * 100
+	}
+	memStyle := colorByLevel(memPct, 100)
 
 	lines := []string{
 		fmt.Sprintf("  %s  %s", labelStyle.Render("Container:"), valueStyle.Render(v.containerName)),
 		fmt.Sprintf("  %s  %s", labelStyle.Render("Image:    "), valueStyle.Render(v.image)),
 		"",
-		fmt.Sprintf("  %s  %s", labelStyle.Render("CPU:      "), formatCPU(s.CPUPercent)),
-	}
-
-	if shouldShowSparkline(v.cpuHistory[v.containerID], 1.0) {
-		lines = append(lines,
-			fmt.Sprintf("  %s%s", pad, ui.ColoredSparkline(v.cpuHistory[v.containerID], 100)))
-	}
-
-	lines = append(lines, "",
-		fmt.Sprintf("  %s  %s / %s", labelStyle.Render("Memory:   "), formatMemory(s.MemUsage), formatMemory(s.MemLimit)),
-	)
-
-	memThreshold := float64(s.MemLimit) * 0.01
-	if memThreshold < 1048576 {
-		memThreshold = 1048576
-	}
-	if shouldShowSparkline(v.memHistory[v.containerID], memThreshold) {
-		lines = append(lines,
-			fmt.Sprintf("  %s%s", pad, ui.ColoredSparkline(v.memHistory[v.containerID], float64(s.MemLimit))))
-	}
-
-	lines = append(lines, "",
+		fmt.Sprintf("  %s  %s", labelStyle.Render("CPU:      "), cpuStyle.Render(formatCPU(s.CPUPercent))),
+		"",
+		fmt.Sprintf("  %s  %s / %s (%s)", labelStyle.Render("Memory:   "),
+			memStyle.Render(formatMemory(s.MemUsage)),
+			formatMemory(s.MemLimit),
+			memStyle.Render(fmt.Sprintf("%.1f%%", memPct))),
+		"",
 		fmt.Sprintf("  %s  %s", labelStyle.Render("Net RX:   "), formatMemory(s.NetRx)),
 		fmt.Sprintf("  %s  %s", labelStyle.Render("Net TX:   "), formatMemory(s.NetTx)),
-	)
+	}
 
 	visible := v.height - 2
 	if visible < 1 {

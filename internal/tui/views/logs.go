@@ -28,6 +28,7 @@ type LogsView struct {
 	maxLines      int
 	follow        bool
 	offset        int
+	pausedAt      int
 	width         int
 	height        int
 	pendingG      bool
@@ -114,19 +115,20 @@ func (v LogsView) Update(msg tea.Msg, keys ui.KeyMap) (LogsView, tea.Cmd) {
 		return v, nil
 
 	case tea.MouseMsg:
+		total := v.pausedTotal()
 		visibleLines := v.visibleHeight()
 		if msg.Button == tea.MouseButtonWheelUp {
-			if v.offset < len(v.lines)-visibleLines {
+			if v.offset < total-visibleLines {
 				v.offset++
-				v.follow = false
+				if v.follow {
+					v.follow = false
+					v.pausedAt = len(v.lines)
+				}
 			}
 		}
 		if msg.Button == tea.MouseButtonWheelDown {
 			if v.offset > 0 {
 				v.offset--
-			}
-			if v.offset == 0 {
-				v.follow = true
 			}
 		}
 		return v, nil
@@ -146,8 +148,12 @@ func (v LogsView) handleKeyMsg(msg tea.KeyMsg, keys ui.KeyMap) (LogsView, tea.Cm
 	if v.pendingG {
 		v.pendingG = false
 		if msg.String() == "g" {
-			v.offset = len(v.lines)
 			v.follow = false
+			v.pausedAt = len(v.lines)
+			v.offset = v.pausedAt - v.visibleHeight()
+			if v.offset < 0 {
+				v.offset = 0
+			}
 			return v, nil
 		}
 	}
@@ -156,31 +162,40 @@ func (v LogsView) handleKeyMsg(msg tea.KeyMsg, keys ui.KeyMap) (LogsView, tea.Cm
 
 	switch {
 	case ui.MatchKey(msg, keys.Up):
-		if v.offset < len(v.lines)-visibleLines {
+		total := v.pausedTotal()
+		if v.offset < total-visibleLines {
 			v.offset++
-			v.follow = false
+			if v.follow {
+				v.follow = false
+				v.pausedAt = len(v.lines)
+			}
 		}
 	case ui.MatchKey(msg, keys.Down):
 		if v.offset > 0 {
 			v.offset--
 		}
-		if v.offset == 0 {
-			v.follow = true
-		}
 	case ui.MatchKey(msg, keys.Bottom):
 		v.offset = 0
 		v.follow = true
+		v.pausedAt = 0
 	case msg.String() == "g":
 		v.pendingG = true
 	case ui.MatchKey(msg, keys.Follow):
 		v.follow = !v.follow
 		if v.follow {
+			v.pausedAt = 0
+			v.offset = 0
+		} else {
+			v.pausedAt = len(v.lines)
 			v.offset = 0
 		}
 	case ui.MatchKey(msg, keys.Search):
 		v.searchMode = true
 		v.searchText = ""
-		v.follow = false
+		if v.follow {
+			v.follow = false
+			v.pausedAt = len(v.lines)
+		}
 	case msg.String() == "n":
 		v.nextSearchHit()
 	case msg.String() == "N":
@@ -245,6 +260,16 @@ func (v LogsView) processLogLines(raw string) LogsView {
 	return v
 }
 
+func (v LogsView) pausedTotal() int {
+	if v.follow || v.pausedAt == 0 {
+		return len(v.lines)
+	}
+	if v.pausedAt > len(v.lines) {
+		return len(v.lines)
+	}
+	return v.pausedAt
+}
+
 func (v LogsView) visibleHeight() int {
 	h := v.height - 3
 	if h < 1 {
@@ -261,9 +286,13 @@ func (v LogsView) View() string {
 	title := ui.ProjectTitleStyle.Render("Logs: " + v.containerName + " [" + mode + "]")
 
 	visible := v.visibleHeight()
-	end := len(v.lines) - v.offset
+	total := v.pausedTotal()
+	end := total - v.offset
 	if end < 0 {
 		end = 0
+	}
+	if end > len(v.lines) {
+		end = len(v.lines)
 	}
 	start := end - visible
 	if start < 0 {
@@ -329,14 +358,18 @@ func (v *LogsView) scrollToHit() {
 		return
 	}
 	hitLine := v.searchHits[v.searchCursor]
-	v.offset = len(v.lines) - hitLine - v.visibleHeight()/2
+	total := v.pausedTotal()
+	v.offset = total - hitLine - v.visibleHeight()/2
 	if v.offset < 0 {
 		v.offset = 0
 	}
-	if v.offset > len(v.lines)-v.visibleHeight() {
-		v.offset = len(v.lines) - v.visibleHeight()
+	if v.offset > total-v.visibleHeight() {
+		v.offset = total - v.visibleHeight()
 	}
-	v.follow = false
+	if v.follow {
+		v.follow = false
+		v.pausedAt = len(v.lines)
+	}
 }
 
 func (v LogsView) isSearchHit(lineIndex int) bool {

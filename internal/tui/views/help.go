@@ -1,6 +1,7 @@
 package views
 
 import (
+	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -11,9 +12,13 @@ type SwitchToHelpMsg struct{}
 type SwitchBackFromHelpMsg struct{}
 
 type HelpView struct {
-	width  int
-	height int
-	scroll int
+	width      int
+	height     int
+	scroll     int
+	searchMode bool
+	searchText string
+	searchHits []int
+	searchCur  int
 }
 
 func (v HelpView) Breadcrumb() string { return "Help" }
@@ -28,21 +33,117 @@ func (v HelpView) SetSize(w, h int) HelpView {
 	return v
 }
 
+func (v HelpView) SearchMode() bool   { return v.searchMode }
+func (v HelpView) SearchText() string { return v.searchText }
+
+func (v HelpView) SearchInfo() string {
+	if v.searchText == "" {
+		return ""
+	}
+	if len(v.searchHits) == 0 {
+		return "no matches"
+	}
+	return fmt.Sprintf("%d/%d matches", v.searchCur+1, len(v.searchHits))
+}
+
 func (v HelpView) Update(msg tea.Msg, keys ui.KeyMap) (HelpView, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch {
-		case ui.MatchKey(msg, keys.Help), ui.MatchKey(msg, keys.Left):
-			return v, func() tea.Msg { return SwitchBackFromHelpMsg{} }
-		case ui.MatchKey(msg, keys.Down):
-			v.scroll++
-		case ui.MatchKey(msg, keys.Up):
-			if v.scroll > 0 {
-				v.scroll--
-			}
+		if v.searchMode {
+			return v.handleSearchInput(msg)
 		}
+		return v.handleKeyMsg(msg, keys)
 	}
 	return v, nil
+}
+
+func (v HelpView) handleSearchInput(msg tea.KeyMsg) (HelpView, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEnter:
+		v.searchMode = false
+		v.applySearch()
+	case tea.KeyEsc:
+		v.searchMode = false
+		v.searchText = ""
+		v.searchHits = nil
+		v.searchCur = 0
+	case tea.KeyBackspace:
+		if len(v.searchText) > 0 {
+			v.searchText = v.searchText[:len(v.searchText)-1]
+		}
+	case tea.KeySpace:
+		v.searchText += " "
+	case tea.KeyRunes:
+		v.searchText += string(msg.Runes)
+	}
+	return v, nil
+}
+
+func (v HelpView) handleKeyMsg(msg tea.KeyMsg, keys ui.KeyMap) (HelpView, tea.Cmd) {
+	switch {
+	case ui.MatchKey(msg, keys.Help), ui.MatchKey(msg, keys.Left):
+		return v, func() tea.Msg { return SwitchBackFromHelpMsg{} }
+	case ui.MatchKey(msg, keys.Down):
+		v.scroll++
+	case ui.MatchKey(msg, keys.Up):
+		if v.scroll > 0 {
+			v.scroll--
+		}
+	case msg.String() == "/":
+		v.searchMode = true
+		v.searchText = ""
+		return v, nil
+	case msg.String() == "n":
+		v.nextMatch()
+	case msg.String() == "N":
+		v.prevMatch()
+	}
+	return v, nil
+}
+
+func (v *HelpView) applySearch() {
+	v.searchHits = nil
+	v.searchCur = 0
+	if v.searchText == "" {
+		return
+	}
+	q := strings.ToLower(v.searchText)
+	for i, line := range strings.Split(helpText, "\n") {
+		if strings.Contains(strings.ToLower(line), q) {
+			v.searchHits = append(v.searchHits, i)
+		}
+	}
+	if len(v.searchHits) > 0 {
+		v.scroll = v.searchHits[0]
+	}
+}
+
+func (v *HelpView) nextMatch() {
+	if len(v.searchHits) == 0 {
+		return
+	}
+	v.searchCur = (v.searchCur + 1) % len(v.searchHits)
+	v.scroll = v.searchHits[v.searchCur]
+}
+
+func (v *HelpView) prevMatch() {
+	if len(v.searchHits) == 0 {
+		return
+	}
+	v.searchCur--
+	if v.searchCur < 0 {
+		v.searchCur = len(v.searchHits) - 1
+	}
+	v.scroll = v.searchHits[v.searchCur]
+}
+
+func (v HelpView) isSearchHit(lineIndex int) bool {
+	for _, idx := range v.searchHits {
+		if idx == lineIndex {
+			return true
+		}
+	}
+	return false
 }
 
 var helpText = strings.TrimSpace(`
@@ -124,14 +225,17 @@ var helpText = strings.TrimSpace(`
     :save [path]      Save logs (in Logs view)
     :edit             Edit compose file (Compose view)
     :go <name>        Jump to project by name
+    :exec <name>      Exec into container by name
+    :validate [name]  Validate compose file
     :help             Show this help
+    Tab               Autocomplete command
 
   Custom Commands (from config)
     1-9               Run custom command (see ~/.config/wharf/config.yaml)
 
   General
     *                 Toggle bookmark (Projects view)
-    /                 Filter (search)
+    /                 Filter / search
     ?                 Show this help
     q                 Quit
 
@@ -152,5 +256,14 @@ func (v HelpView) View() string {
 	if end > len(lines) {
 		end = len(lines)
 	}
-	return strings.Join(lines[start:end], "\n")
+
+	var result []string
+	for i := start; i < end; i++ {
+		line := lines[i]
+		if v.searchText != "" && v.isSearchHit(i) {
+			line = ui.SearchHighlightStyle.Render(line)
+		}
+		result = append(result, line)
+	}
+	return strings.Join(result, "\n")
 }

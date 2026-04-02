@@ -44,6 +44,10 @@ type updateAvailableMsg struct {
 	Version string
 	URL     string
 }
+type composeValidateResultMsg struct {
+	Err    error
+	Output string
+}
 
 type App struct {
 	state           viewState
@@ -798,6 +802,21 @@ func (a App) handleActions(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.updateAvailable = msg.Version
 		return a, nil
 
+	case composeValidateResultMsg:
+		if msg.Err != nil {
+			errText := strings.TrimSpace(msg.Output)
+			if errText == "" {
+				errText = msg.Err.Error()
+			}
+			a.notification = "✕ " + errText
+			a.notificationErr = true
+		} else {
+			a.notification = "✓ Compose file is valid"
+			a.notificationErr = false
+		}
+		a.notificationExp = time.Now().Add(5 * time.Second)
+		return a, tea.Tick(5*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+
 	case notificationClearMsg:
 		if time.Now().After(a.notificationExp) {
 			a.notification = ""
@@ -869,6 +888,8 @@ func (a App) isFilterMode() bool {
 		return a.servicesView.FilterMode()
 	case viewLogs:
 		return a.logsView.SearchMode()
+	case viewHelp:
+		return a.helpView.SearchMode()
 	}
 	return false
 }
@@ -1190,6 +1211,13 @@ func (a App) renderFilterStatus() string {
 		if info := a.logsView.SearchInfo(); info != "" {
 			return ui.MutedStyle.Render("/" + a.logsView.SearchText() + "  " + info)
 		}
+	case viewHelp:
+		if a.helpView.SearchMode() {
+			return ui.FilterInputStyle.Render("/ " + a.helpView.SearchText() + "█")
+		}
+		if info := a.helpView.SearchInfo(); info != "" {
+			return ui.MutedStyle.Render("/" + a.helpView.SearchText() + "  " + info)
+		}
 	}
 	return ""
 }
@@ -1361,11 +1389,89 @@ func (a *App) executeCommand(cmd string) tea.Cmd {
 		a.notificationErr = true
 		a.notificationExp = time.Now().Add(2 * time.Second)
 		return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+	case "exec":
+		if len(parts) < 2 {
+			a.notification = "Usage: :exec <container-name>"
+			a.notificationErr = true
+			a.notificationExp = time.Now().Add(2 * time.Second)
+			return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+		}
+		ct := a.findContainerByName(parts[1])
+		if ct == nil {
+			a.notification = "Container not found: " + parts[1]
+			a.notificationErr = true
+			a.notificationExp = time.Now().Add(2 * time.Second)
+			return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+		}
+		shell := a.docker.DetectShell(context.Background(), ct.ID)
+		banner := fmt.Sprintf(
+			"echo '─────────────────────────────────────────' && "+
+				"echo '  ⚓ Wharf — Container Shell' && "+
+				"echo '  Container: %s' && "+
+				"echo '  Image:     %s' && "+
+				"echo '  Shell:     %s' && "+
+				"echo '  Exit:      type exit or Ctrl+D' && "+
+				"echo '─────────────────────────────────────────' && "+
+				"exec %s",
+			ct.Name, ct.Image, shell, shell,
+		)
+		c := exec.Command("docker", "exec", "-it", ct.ID, "sh", "-c", banner)
+		return tea.ExecProcess(c, func(err error) tea.Msg {
+			return views.ExecDoneMsg{Err: err}
+		})
+	case "validate":
+		var projectPath string
+		if a.state == viewServices {
+			projectPath = a.servicesView.ProjectPath()
+		}
+		if len(parts) > 1 {
+			query := strings.ToLower(parts[1])
+			for _, p := range a.projectsView.Projects() {
+				if strings.Contains(strings.ToLower(p.Name), query) {
+					projectPath = p.Path
+					break
+				}
+			}
+		}
+		if projectPath == "" {
+			a.notification = "validate: navigate to a project or use :validate <name>"
+			a.notificationErr = true
+			a.notificationExp = time.Now().Add(3 * time.Second)
+			return tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+		}
+		return a.validateCompose(projectPath)
 	default:
 		a.notification = "Unknown command: " + cmd
 		a.notificationErr = true
 		a.notificationExp = time.Now().Add(2 * time.Second)
 		return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+	}
+}
+
+func (a *App) findContainerByName(name string) *docker.Container {
+	query := strings.ToLower(name)
+	for _, p := range a.projectsView.Projects() {
+		for _, svc := range p.Services {
+			for i, ct := range svc.Containers {
+				if strings.Contains(strings.ToLower(ct.Name), query) {
+					return &svc.Containers[i]
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (a *App) validateCompose(projectPath string) tea.Cmd {
+	return func() tea.Msg {
+		composePath, err := docker.FindComposeFile(projectPath)
+		if err != nil {
+			return composeValidateResultMsg{Err: err}
+		}
+		cmd := exec.Command("docker", "compose", "-f", composePath, "config", "--quiet")
+		cmd.Dir = projectPath
+		output, err := cmd.CombinedOutput()
+		return composeValidateResultMsg{Err: err, Output: string(output)}
 	}
 }
 

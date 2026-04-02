@@ -1,6 +1,24 @@
 package tui
 
-import tea "github.com/charmbracelet/bubbletea"
+import (
+	"strings"
+
+	tea "github.com/charmbracelet/bubbletea"
+)
+
+var commandList = []string{
+	"q",
+	"q!",
+	"help",
+	"host",
+	"theme",
+	"version",
+	"save",
+	"edit",
+	"go",
+	"exec",
+	"validate",
+}
 
 type CmdMode struct {
 	active  bool
@@ -40,6 +58,8 @@ func (c *CmdMode) HandleKey(msg tea.KeyMsg) {
 		if len(c.input) > 0 {
 			c.input = c.input[:len(c.input)-1]
 		}
+	case tea.KeySpace:
+		c.input += " "
 	case tea.KeyUp:
 		if c.histIdx > 0 {
 			c.histIdx--
@@ -53,7 +73,48 @@ func (c *CmdMode) HandleKey(msg tea.KeyMsg) {
 			c.histIdx = len(c.history)
 			c.input = ""
 		}
+	case tea.KeyTab:
+		c.complete()
 	case tea.KeyRunes:
 		c.input += string(msg.Runes)
 	}
+}
+
+func (c *CmdMode) complete() {
+	input := strings.TrimSpace(c.input)
+	if input == "" {
+		return
+	}
+	parts := strings.Fields(input)
+	if len(parts) > 1 {
+		return
+	}
+	prefix := strings.ToLower(parts[0])
+	var matches []string
+	for _, cmd := range commandList {
+		if strings.HasPrefix(cmd, prefix) {
+			matches = append(matches, cmd)
+		}
+	}
+	if len(matches) == 1 {
+		c.input = matches[0] + " "
+	} else if len(matches) > 1 {
+		common := commonPrefix(matches)
+		if len(common) > len(prefix) {
+			c.input = common
+		}
+	}
+}
+
+func commonPrefix(strs []string) string {
+	if len(strs) == 0 {
+		return ""
+	}
+	prefix := strs[0]
+	for _, s := range strs[1:] {
+		for !strings.HasPrefix(s, prefix) {
+			prefix = prefix[:len(prefix)-1]
+		}
+	}
+	return prefix
 }
