@@ -111,15 +111,6 @@ func (v TopView) View() string {
 	return v.renderContainer()
 }
 
-func shouldShowSparkline(values []float64, threshold float64) bool {
-	for _, v := range values {
-		if v > threshold {
-			return true
-		}
-	}
-	return false
-}
-
 func (v TopView) renderProject() string {
 	type entry struct {
 		name string

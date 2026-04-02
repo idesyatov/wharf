@@ -16,7 +16,7 @@ LDFLAGS := -s -w \
 # Default target
 .PHONY: all build build-all run test vet lint clean \
         docker-build docker-build-linux docker-build-darwin-amd64 docker-build-darwin-arm64 docker-build-windows docker-build-all \
-        docker-run docker-test docker-vet docker-lint docker-deps docker-shell docker-clean \
+        docker-run docker-test docker-vet docker-lint docker-deps docker-shell docker-clean docker-check \
         release help
 all: vet test build-all
 
@@ -155,11 +155,33 @@ docker-clean:
 	@rm -rf $(BUILD_DIR) 2>/dev/null || true
 
 # =============================================================================
+# Pre-release check
+# =============================================================================
+
+# Run all validations: build + vet + test + lint
+docker-check:
+	@echo "Running pre-release checks..."
+	@echo "=== Build ==="
+	@$(COMPOSE) run --rm dev go build $(BUILDFLAGS) ./cmd/wharf || { echo "❌ Build failed"; exit 1; }
+	@echo "✓ Build OK"
+	@echo "=== Vet ==="
+	@$(COMPOSE) run --rm dev go vet ./... || { echo "❌ Vet failed"; exit 1; }
+	@echo "✓ Vet OK"
+	@echo "=== Test ==="
+	@$(COMPOSE) run --rm dev go test $(BUILDFLAGS) ./... || { echo "❌ Tests failed"; exit 1; }
+	@echo "✓ Tests OK"
+	@echo "=== Lint ==="
+	@$(COMPOSE) run --rm dev golangci-lint run || { echo "❌ Lint failed"; exit 1; }
+	@echo "✓ Lint OK"
+	@echo ""
+	@echo "✅ All checks passed — ready to release"
+
+# =============================================================================
 # Release
 # =============================================================================
 
 # Tag and push a release (usage: make release VERSION=v0.1.0)
-release:
+release: docker-check
 ifndef VERSION
 	$(error VERSION is not set. Usage: make release VERSION=v0.1.0)
 endif
@@ -199,9 +221,10 @@ help:
 	@echo "  make docker-shell               - Open shell in dev container"
 	@echo "  make docker-test-integration    - Run integration tests"
 	@echo "  make docker-clean               - Remove binaries and Docker volumes"
+	@echo "  make docker-check               - Pre-release: build + vet + test + lint"
 	@echo ""
 	@echo "Release:"
-	@echo "  make release VERSION=v0.1.0     - Tag and push (triggers GitHub Actions)"
+	@echo "  make release VERSION=v0.1.0     - Pre-release check + tag and push"
 	@echo ""
 	@echo "Other:"
 	@echo "  make all                        - Vet, test, and build all"
