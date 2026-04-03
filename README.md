@@ -14,48 +14,48 @@ A terminal UI for managing Docker Compose stacks. Inspired by [k9s](https://gith
 
 ## Features
 
-- Browse Docker Compose projects and services
-- Start, stop, restart services and compose projects
-- Docker Compose up / stop / down / restart / build
-- Exec into containers (shell) directly from TUI
-- Real-time CPU and memory monitoring
+- Browse and manage Docker Compose projects and services
+- Compose up / stop / down / restart / build / validate
+- Exec into containers with shell banner
+- Real-time CPU and memory monitoring (Top View)
 - Stream container logs with follow/pause and search
-- Inspect container details — ports, volumes, environment, networks
-- View compose file with syntax highlighting
+- Browse files inside containers (File Browser)
+- Edit compose files with your $EDITOR
+- Inspect container details — ports, volumes, environment, networks, health checks
 - Manage volumes, networks, and images
 - Docker System overview with disk usage
 - Live Docker events monitoring
+- Custom commands from config with template variables
+- Command mode with Tab-autocomplete (:exec, :go, :validate, :theme...)
 - Remote Docker host support
-- Bookmark favorite projects (★)
-- Copy container ID to clipboard (OSC 52)
-- Sort tables by any column
+- Bookmark favorite projects (★), bulk operations (Space)
 - Vim-style navigation (hjkl, gg/G, /, :q, arrows)
-- Customizable themes (dark/light/custom)
-- Auto-update check via GitHub Releases
-- Configurable via `~/.config/wharf/config.yaml`
+- Customizable themes (dark/light/custom YAML)
 - Single binary, zero dependencies
 
-## Installation
+## Quick Start
 
-### Homebrew (macOS/Linux)
+### Install (Linux/macOS)
+
+```bash
+curl -sL https://raw.githubusercontent.com/idesyatov/wharf/master/scripts/install.sh | bash
+```
+
+### Homebrew
 
 ```bash
 brew tap idesyatov/tap
 brew install wharf
 ```
 
-### From releases
+### Download binary
 
-Download the latest archive from [GitHub Releases](https://github.com/idesyatov/wharf/releases):
-
-```bash
-tar xzf wharf-v*.tar.gz
-./wharf
-```
+Download from [GitHub Releases](https://github.com/idesyatov/wharf/releases):
 
 | Platform | Archive |
 |----------|---------|
 | Linux amd64 | `wharf-vX.X.X-linux-amd64.tar.gz` |
+| Linux arm64 | `wharf-vX.X.X-linux-arm64.tar.gz` |
 | macOS Intel | `wharf-vX.X.X-darwin-amd64.tar.gz` |
 | macOS Apple Silicon | `wharf-vX.X.X-darwin-arm64.tar.gz` |
 | Windows amd64 | `wharf-vX.X.X-windows-amd64.zip` |
@@ -85,13 +85,16 @@ wharf --config   # show config path and current settings
 | `l`/`→`/`Enter` | Select / drill down | All |
 | `gg` / `G` | Jump to top / bottom | All |
 | `1`–`6` | Sort by column | Tables |
-| `/` | Filter / search | Projects, Services, Logs |
+| `/` | Filter / search | All |
 | `?` | Help | All |
 | `q` / `:q` | Quit | All |
 | | | |
 | `s` / `S` / `r` | Start / Stop / Restart service | Services |
 | `e` | Exec into container | Services, Detail |
 | `L` | View logs | Services, Detail |
+| `t` | Resource monitor (top) | Projects, Services |
+| `F` | Browse container files | Services, Detail |
+| | | |
 | `u` | Compose up | Projects |
 | `d` | Compose stop | Projects |
 | `X` | Compose down (removes containers) | Projects |
@@ -99,30 +102,54 @@ wharf --config   # show config path and current settings
 | `b` / `B` | Build service / all | Services |
 | | | |
 | `c` | Compose file preview | Services |
+| `e` | Edit compose file ($EDITOR) | Compose |
 | `v` / `n` | Volumes / Networks | Services |
 | `i` | Images | Projects |
 | `E` | Docker events | Projects |
 | `D` | System disk usage | Projects |
 | `*` | Toggle bookmark | Projects |
 | `y` / `Y` | Copy ID / full info | Services, Detail |
-| `f` | Toggle log follow | Logs |
-| `n` / `N` | Next / prev search match | Logs |
+| `f` | Toggle log follow/pause | Logs |
 | `P` | Prune | Volumes, Images, System |
 | `Space` | Toggle select (bulk) | Projects |
 
 <details>
-<summary>Command Mode</summary>
+<summary>Command Mode (Tab-autocomplete supported)</summary>
 
-Press `:` then type a command, `Enter` to execute:
+Press `:` then type a command, `Enter` to execute, `Tab` to autocomplete:
 
 | Command | Action |
 |---------|--------|
 | `:q` / `:q!` | Quit |
+| `:go <name>` | Jump to project by name |
+| `:exec <name>` | Exec into container by name |
+| `:validate [name]` | Validate compose file |
+| `:theme dark/light` | Switch theme |
 | `:host` | Show current Docker host |
-| `:theme dark` / `:theme light` | Switch theme |
 | `:version` | Show version info |
 | `:save [path]` | Save logs to file (Logs view) |
+| `:edit` | Edit compose file (Compose view) |
 | `:help` | Show help |
+
+</details>
+
+<details>
+<summary>Custom Commands</summary>
+
+Define custom commands in config — they appear in Services View menu bar:
+
+```yaml
+# ~/.config/wharf/config.yaml
+custom_commands:
+  - name: "Rails Console"
+    key: "1"
+    command: "docker exec -it {{.ContainerID}} rails console"
+  - name: "Run Tests"
+    key: "2"
+    command: "docker exec -it {{.ContainerID}} bundle exec rspec"
+```
+
+Template variables: `{{.ContainerID}}`, `{{.ContainerName}}`, `{{.Image}}`, `{{.ProjectName}}`, `{{.ProjectPath}}`
 
 </details>
 
@@ -133,9 +160,9 @@ Press `:` then type a command, `Enter` to execute:
 poll_interval: 2s
 log_tail: 100
 max_log_lines: 1000
-theme: dark              # dark, light, or custom theme name
-docker_host: ""          # e.g. tcp://192.168.1.10:2375 or ssh://user@host
-mouse: false             # enable mouse support
+theme: dark
+docker_host: ""
+mouse: false
 bookmarks:
   - my-project
 keybindings:
@@ -143,23 +170,6 @@ keybindings:
 ```
 
 Custom themes: `~/.config/wharf/themes/<name>.yaml`
-
-## Development
-
-```bash
-make help                # show all commands
-make docker-build-all    # cross-compile all platforms
-make docker-run          # run TUI via Docker
-make docker-test         # run tests
-make docker-vet          # go vet
-```
-
-### Testing with example stacks
-
-```bash
-cd examples/multi-service && docker compose up -d && cd ../..
-./bin/wharf-linux-amd64
-```
 
 ## Tech Stack
 
