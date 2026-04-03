@@ -141,7 +141,7 @@ docker-clean:
 docker-check:
 	@echo "Running pre-release checks..."
 	@echo "=== Build ==="
-	@$(COMPOSE) run --rm dev go build $(BUILDFLAGS) ./cmd/wharf || { echo "❌ Build failed"; exit 1; }
+	@$(COMPOSE) run --rm dev go build $(BUILDFLAGS) -o /dev/null ./cmd/wharf || { echo "❌ Build failed"; exit 1; }
 	@echo "✓ Build OK"
 	@echo "=== Vet ==="
 	@$(COMPOSE) run --rm dev go vet ./... || { echo "❌ Vet failed"; exit 1; }

@@ -36,7 +36,9 @@ type TopView struct {
 	stats         map[string]docker.Stats
 	width, height int
 	cursor        int
-	scroll        int
+	cpuHistory    []float64
+	memHistory    []float64
+	chartWidth    int
 }
 
 func NewTopViewProject(project docker.Project) TopView {
@@ -69,12 +71,56 @@ func (v TopView) Breadcrumb() string {
 func (v TopView) SetSize(w, h int) TopView {
 	v.width = w
 	v.height = h
+	cw := (w - 10) / 2
+	if cw < 10 {
+		cw = 10
+	}
+	if cw > 120 {
+		cw = 120
+	}
+	v.chartWidth = cw
+	if len(v.cpuHistory) > cw {
+		v.cpuHistory = v.cpuHistory[len(v.cpuHistory)-cw:]
+	}
+	if len(v.memHistory) > cw {
+		v.memHistory = v.memHistory[len(v.memHistory)-cw:]
+	}
 	return v
 }
 
 func (v TopView) UpdateStats(stats map[string]docker.Stats) TopView {
 	v.stats = stats
+	if !v.IsProjectMode() {
+		s := stats[v.containerID]
+		v.cpuHistory = appendHistory(v.cpuHistory, s.CPUPercent, v.chartWidth)
+		memPct := 0.0
+		if s.MemLimit > 0 {
+			memPct = float64(s.MemUsage) / float64(s.MemLimit) * 100
+		}
+		v.memHistory = appendHistory(v.memHistory, memPct, v.chartWidth)
+	}
 	return v
+}
+
+func appendHistory(h []float64, val float64, maxLen int) []float64 {
+	if maxLen <= 0 {
+		maxLen = 60
+	}
+	h = append(h, val)
+	if len(h) > maxLen {
+		h = h[len(h)-maxLen:]
+	}
+	return h
+}
+
+func maxInSlice(values []float64) float64 {
+	m := 0.0
+	for _, v := range values {
+		if v > m {
+			m = v
+		}
+	}
+	return m
 }
 
 func (v TopView) Update(msg tea.Msg, keys ui.KeyMap) (TopView, tea.Cmd) {
@@ -86,17 +132,11 @@ func (v TopView) Update(msg tea.Msg, keys ui.KeyMap) (TopView, tea.Cmd) {
 		case ui.MatchKey(msg, keys.Down):
 			if v.IsProjectMode() {
 				v.cursor++
-			} else {
-				v.scroll++
 			}
 		case ui.MatchKey(msg, keys.Up):
 			if v.IsProjectMode() {
 				if v.cursor > 0 {
 					v.cursor--
-				}
-			} else {
-				if v.scroll > 0 {
-					v.scroll--
 				}
 			}
 		}
@@ -204,46 +244,101 @@ func (v TopView) renderContainer() string {
 	labelStyle := ui.MutedStyle
 	valueStyle := lipgloss.NewStyle().Foreground(ui.ColorPrimary)
 
-	cpuStyle := colorByLevel(s.CPUPercent, 100)
+	header := lipgloss.JoinVertical(lipgloss.Left,
+		fmt.Sprintf("  %s  %s", labelStyle.Render("Container:"), valueStyle.Render(v.containerName)),
+		fmt.Sprintf("  %s  %s", labelStyle.Render("Image:    "), valueStyle.Render(v.image)),
+	)
+
+	if len(v.cpuHistory) == 0 {
+		return header + "\n\n" + lipgloss.NewStyle().Foreground(ui.ColorSuccess).Render("  Loading stats...")
+	}
 
 	memPct := 0.0
 	if s.MemLimit > 0 {
 		memPct = float64(s.MemUsage) / float64(s.MemLimit) * 100
 	}
+
+	cpuStyle := colorByLevel(s.CPUPercent, 100)
 	memStyle := colorByLevel(memPct, 100)
 
-	lines := []string{
-		fmt.Sprintf("  %s  %s", labelStyle.Render("Container:"), valueStyle.Render(v.containerName)),
-		fmt.Sprintf("  %s  %s", labelStyle.Render("Image:    "), valueStyle.Render(v.image)),
-		"",
-		fmt.Sprintf("  %s  %s", labelStyle.Render("CPU:      "), cpuStyle.Render(formatCPU(s.CPUPercent))),
-		"",
-		fmt.Sprintf("  %s  %s / %s (%s)", labelStyle.Render("Memory:   "),
-			memStyle.Render(formatMemory(s.MemUsage)),
-			formatMemory(s.MemLimit),
-			memStyle.Render(fmt.Sprintf("%.1f%%", memPct))),
-		"",
-		fmt.Sprintf("  %s  %s", labelStyle.Render("Net RX:   "), formatMemory(s.NetRx)),
-		fmt.Sprintf("  %s  %s", labelStyle.Render("Net TX:   "), formatMemory(s.NetTx)),
+	chartHeight := v.height - 10
+	if chartHeight < 5 {
+		chartHeight = 5
+	}
+	if chartHeight > 15 {
+		chartHeight = 15
 	}
 
-	visible := v.height - 2
-	if visible < 1 {
-		visible = len(lines)
+	cw := v.chartWidth
+
+	cpuMax := maxInSlice(v.cpuHistory)
+	if cpuMax < 1 {
+		cpuMax = 1
 	}
-	start := v.scroll
-	if start >= len(lines) {
-		start = len(lines) - 1
-	}
-	if start < 0 {
-		start = 0
-	}
-	end := start + visible
-	if end > len(lines) {
-		end = len(lines)
+	cpuMax = cpuMax * 1.1
+	if cpuMax > 100 {
+		cpuMax = 100
 	}
 
-	return strings.Join(lines[start:end], "\n")
+	memMax := maxInSlice(v.memHistory)
+	if memMax < 1 {
+		memMax = 1
+	}
+	memMax = memMax * 1.2
+
+	cpuChartText := ui.BrailleChart(v.cpuHistory, cpuMax, cw, chartHeight)
+	memChartText := ui.BrailleChart(v.memHistory, memMax, cw, chartHeight)
+
+	var cpuColored string
+	cpuChartLines := strings.Split(cpuChartText, "\n")
+	if len(cpuChartLines) <= 1 {
+		cpuColored = cpuStyle.Render(cpuChartText)
+	} else {
+		var cpuColoredLines []string
+		for i, line := range cpuChartLines {
+			pct := float64(i) / float64(len(cpuChartLines)-1)
+			var style lipgloss.Style
+			switch {
+			case pct < 0.33:
+				style = lipgloss.NewStyle().Foreground(ui.ColorDanger)
+			case pct < 0.66:
+				style = lipgloss.NewStyle().Foreground(ui.ColorWarning)
+			default:
+				style = lipgloss.NewStyle().Foreground(ui.ColorSuccess)
+			}
+			cpuColoredLines = append(cpuColoredLines, style.Render(line))
+		}
+		cpuColored = strings.Join(cpuColoredLines, "\n")
+	}
+	memColored := memStyle.Render(memChartText)
+
+	chartBoxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(ui.ColorBorder).
+		Width(cw)
+
+	cpuBox := chartBoxStyle.Render(cpuColored)
+	memBox := chartBoxStyle.Render(memColored)
+
+	cpuLabel := cpuStyle.Render(fmt.Sprintf("CPU [%s]", formatCPU(s.CPUPercent)))
+	memLabel := memStyle.Render(fmt.Sprintf("MEM [%s / %s · %.1f%%]",
+		formatMemory(s.MemUsage), formatMemory(s.MemLimit), memPct))
+
+	cpuFull := cpuLabel + "\n" + cpuBox
+	memFull := memLabel + "\n" + memBox
+
+	var charts string
+	if v.width < 60 {
+		charts = cpuFull + "\n\n" + memFull
+	} else {
+		charts = lipgloss.JoinHorizontal(lipgloss.Top, cpuFull, "  ", memFull)
+	}
+
+	netLine := fmt.Sprintf("  Net RX: %s    Net TX: %s",
+		formatMemory(s.NetRx), formatMemory(s.NetTx))
+
+	indent := lipgloss.NewStyle().PaddingLeft(2)
+	return header + "\n\n" + indent.Render(charts) + "\n\n" + netLine
 }
 
 func LoadTopStats(client *docker.Client, project docker.Project) tea.Cmd {

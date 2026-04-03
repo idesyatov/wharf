@@ -83,7 +83,7 @@ wharf/
 |   |       +-- detail.go        # Детали контейнера, ports, env, networks, health log
 |   |       +-- logs.go          # Стриминг логов, поиск (/pattern, n/N), export (w)
 |   |       +-- compose.go       # Compose file preview + edit ($EDITOR)
-|   |       +-- top.go           # Resource Monitor — sparklines CPU/RAM, Network I/O
+|   |       +-- top.go           # Resource Monitor — braille charts CPU/MEM, Network I/O
 |   |       +-- volumes.go       # Управление volumes, remove, prune
 |   |       +-- networks.go      # Управление networks
 |   |       +-- images.go        # Images: pull, prune
@@ -98,6 +98,7 @@ wharf/
 |   |   +-- theme.go             # LoadTheme/ApplyTheme, встроенные dark/light, кастомные из YAML
 |   |   +-- clipboard.go         # CopyToClipboard через OSC 52
 |   |   +-- sparkline.go         # Unicode sparkline графики, ColoredSparkline
+|   |   +-- barchart.go          # Braille line chart (BrailleChart, Bresenham)
 |   +-- docker/
 |   |   +-- client.go            # Docker SDK обёртка: Stats, Inspect, Volumes, Networks, Images,
 |   |   |                        # Events, SystemDf, ExecOutput, DetectShell, SubscribeEvents
@@ -132,12 +133,24 @@ wharf/
 |  redis    ms-redis   running -  0%   7Mi  ...    |
 |                                                  |
 +--------------------------------------------------+
-| <s>tart <S>top <r>estart <e>xec <L>ogs          |  <- Menu bar (2 строки)
+| <s>tart <S>top <r>estart <e>xec <L>ogs           |  <- Menu bar (2 строки)
 | <t>op <F>iles <b>uild <c>ompose <v>ol </>filter  |
 +--------------------------------------------------+
 | Loading stats...                                 |  <- Status line
 +--------------------------------------------------+
 ```
+
+## Braille Charts (internal/ui/barchart.go)
+
+Container Top View использует braille line charts для визуализации CPU и MEM.
+
+- `BrailleChart()` — рендерит braille line chart (plain text, без ANSI)
+- Braille-символы (U+2800–U+28FF) — матрица 2×4 точки, удвоенное разрешение
+- Алгоритм Брезенхема для плавных диагональных линий
+- Автошкала по максимальному значению из истории
+- CPU-график окрашен по зонам высоты (зелёный/жёлтый/красный)
+- MEM-график одноцветный по текущему уровню
+- Рамки через lipgloss.Border() (RoundedBorder)
 
 ## Деплой / Дистрибуция
 - Один статический бинарник, zero dependencies
