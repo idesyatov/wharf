@@ -5,7 +5,13 @@
 set -e
 
 REPO="idesyatov/wharf"
-INSTALL_DIR="${DIR:-$HOME/.local/bin}"
+if [ -n "$DIR" ]; then
+    INSTALL_DIR="$DIR"
+elif [ "$(id -u)" = "0" ]; then
+    INSTALL_DIR="/usr/local/bin"
+else
+    INSTALL_DIR="$HOME/.local/bin"
+fi
 
 # Detect OS
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
