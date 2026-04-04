@@ -39,6 +39,11 @@ type TopView struct {
 	cpuHistory    []float64
 	memHistory    []float64
 	chartWidth    int
+	prevNetRx     uint64
+	prevNetTx     uint64
+	netRxHistory  []float64
+	netTxHistory  []float64
+	netChartWidth int
 }
 
 func NewTopViewProject(project docker.Project) TopView {
@@ -85,6 +90,17 @@ func (v TopView) SetSize(w, h int) TopView {
 	if len(v.memHistory) > cw {
 		v.memHistory = v.memHistory[len(v.memHistory)-cw:]
 	}
+	nw := 2*cw + 4
+	if nw < 20 {
+		nw = 20
+	}
+	v.netChartWidth = nw
+	if len(v.netRxHistory) > nw {
+		v.netRxHistory = v.netRxHistory[len(v.netRxHistory)-nw:]
+	}
+	if len(v.netTxHistory) > nw {
+		v.netTxHistory = v.netTxHistory[len(v.netTxHistory)-nw:]
+	}
 	return v
 }
 
@@ -98,6 +114,22 @@ func (v TopView) UpdateStats(stats map[string]docker.Stats) TopView {
 			memPct = float64(s.MemUsage) / float64(s.MemLimit) * 100
 		}
 		v.memHistory = appendHistory(v.memHistory, memPct, v.chartWidth)
+
+		// Network rate calculation (delta between ticks)
+		if v.prevNetRx > 0 {
+			rxRate := float64(s.NetRx - v.prevNetRx)
+			txRate := float64(s.NetTx - v.prevNetTx)
+			if rxRate < 0 {
+				rxRate = 0
+			}
+			if txRate < 0 {
+				txRate = 0
+			}
+			v.netRxHistory = appendHistory(v.netRxHistory, rxRate, v.netChartWidth)
+			v.netTxHistory = appendHistory(v.netTxHistory, txRate, v.netChartWidth)
+		}
+		v.prevNetRx = s.NetRx
+		v.prevNetTx = s.NetTx
 	}
 	return v
 }
@@ -238,6 +270,28 @@ func colorByLevel(value, max float64) lipgloss.Style {
 	}
 }
 
+func colorChartByZones(chartText string) string {
+	lines := strings.Split(chartText, "\n")
+	if len(lines) <= 1 {
+		return lipgloss.NewStyle().Foreground(ui.ColorSuccess).Render(chartText)
+	}
+	var colored []string
+	for i, line := range lines {
+		pct := float64(i) / float64(len(lines)-1)
+		var style lipgloss.Style
+		switch {
+		case pct < 0.33:
+			style = lipgloss.NewStyle().Foreground(ui.ColorDanger)
+		case pct < 0.66:
+			style = lipgloss.NewStyle().Foreground(ui.ColorWarning)
+		default:
+			style = lipgloss.NewStyle().Foreground(ui.ColorSuccess)
+		}
+		colored = append(colored, style.Render(line))
+	}
+	return strings.Join(colored, "\n")
+}
+
 func (v TopView) renderContainer() string {
 	s := v.stats[v.containerID]
 
@@ -261,12 +315,12 @@ func (v TopView) renderContainer() string {
 	cpuStyle := colorByLevel(s.CPUPercent, 100)
 	memStyle := colorByLevel(memPct, 100)
 
-	chartHeight := v.height - 10
-	if chartHeight < 5 {
-		chartHeight = 5
+	chartHeight := v.height - 22
+	if chartHeight < 3 {
+		chartHeight = 3
 	}
-	if chartHeight > 15 {
-		chartHeight = 15
+	if chartHeight > 12 {
+		chartHeight = 12
 	}
 
 	cw := v.chartWidth
@@ -289,27 +343,7 @@ func (v TopView) renderContainer() string {
 	cpuChartText := ui.BrailleChart(v.cpuHistory, cpuMax, cw, chartHeight)
 	memChartText := ui.BrailleChart(v.memHistory, memMax, cw, chartHeight)
 
-	var cpuColored string
-	cpuChartLines := strings.Split(cpuChartText, "\n")
-	if len(cpuChartLines) <= 1 {
-		cpuColored = cpuStyle.Render(cpuChartText)
-	} else {
-		var cpuColoredLines []string
-		for i, line := range cpuChartLines {
-			pct := float64(i) / float64(len(cpuChartLines)-1)
-			var style lipgloss.Style
-			switch {
-			case pct < 0.33:
-				style = lipgloss.NewStyle().Foreground(ui.ColorDanger)
-			case pct < 0.66:
-				style = lipgloss.NewStyle().Foreground(ui.ColorWarning)
-			default:
-				style = lipgloss.NewStyle().Foreground(ui.ColorSuccess)
-			}
-			cpuColoredLines = append(cpuColoredLines, style.Render(line))
-		}
-		cpuColored = strings.Join(cpuColoredLines, "\n")
-	}
+	cpuColored := colorChartByZones(cpuChartText)
 	memColored := memStyle.Render(memChartText)
 
 	chartBoxStyle := lipgloss.NewStyle().
@@ -327,17 +361,77 @@ func (v TopView) renderContainer() string {
 	cpuFull := cpuLabel + "\n" + cpuBox
 	memFull := memLabel + "\n" + memBox
 
-	var charts string
-	if v.width < 60 {
-		charts = cpuFull + "\n\n" + memFull
-	} else {
-		charts = lipgloss.JoinHorizontal(lipgloss.Top, cpuFull, "  ", memFull)
+	// Net I/O chart
+	var netFull string
+	if len(v.netRxHistory) > 0 || len(v.netTxHistory) > 0 {
+		rxRate := 0.0
+		if len(v.netRxHistory) > 0 {
+			rxRate = v.netRxHistory[len(v.netRxHistory)-1]
+		}
+		txRate := 0.0
+		if len(v.netTxHistory) > 0 {
+			txRate = v.netTxHistory[len(v.netTxHistory)-1]
+		}
+
+		netLabel := ui.MutedStyle.Render(fmt.Sprintf("Net I/O [↓ %s/s  ↑ %s/s]",
+			formatMemory(uint64(rxRate)), formatMemory(uint64(txRate))))
+
+		netMiniHeight := 3
+		nw := v.netChartWidth
+
+		rxMax := maxInSlice(v.netRxHistory)
+		if rxMax < 1 {
+			rxMax = 1
+		}
+		rxMax *= 1.2
+		txMax := maxInSlice(v.netTxHistory)
+		if txMax < 1 {
+			txMax = 1
+		}
+		txMax *= 1.2
+
+		rxChart := ui.BrailleChart(v.netRxHistory, rxMax, nw, netMiniHeight)
+		txChart := ui.BrailleChart(v.netTxHistory, txMax, nw, netMiniHeight)
+
+		rxColored := colorChartByZones(rxChart)
+		txColored := colorChartByZones(txChart)
+
+		separator := ui.MutedStyle.Render(strings.Repeat("─", nw))
+		rxLabel := lipgloss.NewStyle().Foreground(ui.ColorSuccess).Render("RX")
+		txLabel := lipgloss.NewStyle().Foreground(ui.ColorSuccess).Render("TX")
+
+		netContent := rxLabel + "\n" + rxColored + "\n" + separator + "\n" + txLabel + "\n" + txColored
+
+		netBoxStyle := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(ui.ColorBorder).
+			Width(nw)
+
+		netBox := netBoxStyle.Render(netContent)
+		netFull = netLabel + "\n" + netBox
 	}
 
+	// Fallback net line (before first delta is calculated)
 	netLine := fmt.Sprintf("  Net RX: %s    Net TX: %s",
 		formatMemory(s.NetRx), formatMemory(s.NetTx))
 
+	var charts string
+	if v.width < 60 {
+		charts = cpuFull + "\n\n" + memFull
+		if netFull != "" {
+			charts += "\n\n" + netFull
+		}
+	} else {
+		charts = lipgloss.JoinHorizontal(lipgloss.Top, cpuFull, "  ", memFull)
+		if netFull != "" {
+			charts += "\n\n" + netFull
+		}
+	}
+
 	indent := lipgloss.NewStyle().PaddingLeft(2)
+	if netFull != "" {
+		return header + "\n\n" + indent.Render(charts)
+	}
 	return header + "\n\n" + indent.Render(charts) + "\n\n" + netLine
 }
 
