@@ -19,6 +19,7 @@ type HelpView struct {
 	searchText string
 	searchHits []int
 	searchCur  int
+	pendingG   bool
 }
 
 func (v HelpView) Breadcrumb() string { return "Help" }
@@ -80,6 +81,14 @@ func (v HelpView) handleSearchInput(msg tea.KeyMsg) (HelpView, tea.Cmd) {
 }
 
 func (v HelpView) handleKeyMsg(msg tea.KeyMsg, keys ui.KeyMap) (HelpView, tea.Cmd) {
+	if v.pendingG {
+		v.pendingG = false
+		if msg.String() == "g" {
+			v.scroll = 0
+			return v, nil
+		}
+	}
+
 	switch {
 	case ui.MatchKey(msg, keys.Help), ui.MatchKey(msg, keys.Left):
 		return v, func() tea.Msg { return SwitchBackFromHelpMsg{} }
@@ -89,6 +98,11 @@ func (v HelpView) handleKeyMsg(msg tea.KeyMsg, keys ui.KeyMap) (HelpView, tea.Cm
 		if v.scroll > 0 {
 			v.scroll--
 		}
+	case ui.MatchKey(msg, keys.Bottom):
+		// handled by clamp below
+		v.scroll = len(strings.Split(helpText, "\n"))
+	case msg.String() == "g":
+		v.pendingG = true
 	case msg.String() == "/":
 		v.searchMode = true
 		v.searchText = ""
@@ -98,6 +112,24 @@ func (v HelpView) handleKeyMsg(msg tea.KeyMsg, keys ui.KeyMap) (HelpView, tea.Cm
 	case msg.String() == "N":
 		v.prevMatch()
 	}
+
+	// Clamp scroll
+	totalLines := len(strings.Split(helpText, "\n"))
+	visible := v.height - 2
+	if visible < 1 {
+		visible = 1
+	}
+	maxScroll := totalLines - visible
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if v.scroll > maxScroll {
+		v.scroll = maxScroll
+	}
+	if v.scroll < 0 {
+		v.scroll = 0
+	}
+
 	return v, nil
 }
 

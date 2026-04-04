@@ -40,6 +40,7 @@ const (
 )
 
 type notificationClearMsg struct{}
+type switchHostMsg struct{ host string }
 type updateAvailableMsg struct {
 	Version string
 	URL     string
@@ -83,7 +84,13 @@ type App struct {
 }
 
 func NewApp(cfg *config.Config) App {
-	client, err := docker.NewClient()
+	var client *docker.Client
+	var err error
+	if cfg.DockerHost != "" {
+		client, err = docker.NewClientWithHost(cfg.DockerHost)
+	} else {
+		client, err = docker.NewClient()
+	}
 	keys := ui.DefaultKeyMap()
 	keys = ui.ApplyKeyBindings(keys, cfg.KeyBindings)
 
@@ -686,7 +693,9 @@ func (a App) handleFileAndNavMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, views.LoadDirectoryListing(a.docker, msg.ContainerID, msg.Path)
 
 	case views.SwitchToHelpMsg:
-		a.prevState = a.state
+		if a.state != viewHelp {
+			a.prevState = a.state
+		}
 		a.state = viewHelp
 		a.helpView = views.NewHelpView().SetSize(a.width, a.height-5)
 		return a, nil
@@ -817,6 +826,41 @@ func (a App) handleActions(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.notificationExp = time.Now().Add(5 * time.Second)
 		return a, tea.Tick(5*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
 
+	case switchHostMsg:
+		var newClient *docker.Client
+		var connErr error
+		if msg.host != "" {
+			newClient, connErr = docker.NewClientWithHost(msg.host)
+		} else {
+			newClient, connErr = docker.NewClient()
+		}
+		if connErr != nil {
+			a.notification = "Connection failed: " + connErr.Error()
+			a.notificationErr = true
+			a.notificationExp = time.Now().Add(5 * time.Second)
+			return a, tea.Tick(5*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+		}
+		if a.docker != nil {
+			a.docker.Close()
+		}
+		a.docker = newClient
+		a.cfg.DockerHost = msg.host
+		if ch, evErr := newClient.SubscribeEvents(context.Background()); evErr == nil {
+			a.eventsChan = ch
+		}
+		hostName := "local"
+		if msg.host != "" {
+			hostName = msg.host
+		}
+		a.notification = "Connected: " + hostName
+		a.notificationErr = false
+		a.notificationExp = time.Now().Add(3 * time.Second)
+		a.state = viewProjects
+		return a, tea.Batch(
+			views.LoadProjects(a.docker),
+			tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} }),
+		)
+
 	case notificationClearMsg:
 		if time.Now().After(a.notificationExp) {
 			a.notification = ""
@@ -913,12 +957,15 @@ func (a App) renderInfoBar() string {
 	}
 
 	host := "local"
-	if dh := os.Getenv("DOCKER_HOST"); dh != "" {
-		if u, err := url.Parse(dh); err == nil {
+	if a.cfg.DockerHost != "" {
+		if u, err := url.Parse(a.cfg.DockerHost); err == nil && u.Host != "" {
 			host = u.Host
-			if host == "" {
-				host = dh
-			}
+		} else {
+			host = a.cfg.DockerHost
+		}
+	} else if dh := os.Getenv("DOCKER_HOST"); dh != "" {
+		if u, err := url.Parse(dh); err == nil && u.Host != "" {
+			host = u.Host
 		} else {
 			host = dh
 		}
@@ -1311,14 +1358,23 @@ func (a *App) executeCommand(cmd string) tea.Cmd {
 	case "help":
 		return func() tea.Msg { return views.SwitchToHelpMsg{} }
 	case "host":
-		host := "local"
-		if dh := os.Getenv("DOCKER_HOST"); dh != "" {
-			host = dh
+		if len(parts) < 2 {
+			host := "local"
+			if a.cfg.DockerHost != "" {
+				host = a.cfg.DockerHost
+			} else if dh := os.Getenv("DOCKER_HOST"); dh != "" {
+				host = dh
+			}
+			a.notification = "Docker host: " + host
+			a.notificationErr = false
+			a.notificationExp = time.Now().Add(3 * time.Second)
+			return tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
 		}
-		a.notification = "Docker host: " + host
-		a.notificationErr = false
-		a.notificationExp = time.Now().Add(3 * time.Second)
-		return tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+		newHost := parts[1]
+		if newHost == "local" {
+			newHost = ""
+		}
+		return func() tea.Msg { return switchHostMsg{host: newHost} }
 	case "theme":
 		if len(parts) < 2 {
 			a.notification = "Usage: :theme dark|light"

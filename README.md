@@ -17,7 +17,7 @@ A terminal UI for managing Docker Compose stacks. Inspired by [k9s](https://gith
 - Browse and manage Docker Compose projects and services
 - Compose up / stop / down / restart / build / validate
 - Exec into containers with shell banner
-- Real-time CPU and memory monitoring (Top View)
+- Real-time CPU/MEM/Network monitoring with braille charts (Top View)
 - Stream container logs with follow/pause and search
 - Browse files inside containers (File Browser)
 - Edit compose files with your $EDITOR
@@ -26,8 +26,8 @@ A terminal UI for managing Docker Compose stacks. Inspired by [k9s](https://gith
 - Docker System overview with disk usage
 - Live Docker events monitoring
 - Custom commands from config with template variables
-- Command mode with Tab-autocomplete (:exec, :go, :validate, :theme...)
-- Remote Docker host support
+- Command mode with Tab-autocomplete (:exec, :go, :validate, :theme, :host...)
+- Remote Docker host via SSH (`:host ssh://user@server`)
 - Bookmark favorite projects (★), bulk operations (Space)
 - Vim-style navigation (hjkl, gg/G, /, :q, arrows)
 - Customizable themes (dark/light/custom YAML)
@@ -76,7 +76,8 @@ wharf --version  # show version
 wharf --config   # show config path and current settings
 ```
 
-## Keybindings
+<details>
+<summary>Keybindings</summary>
 
 | Key | Action | Context |
 |-----|--------|---------|
@@ -113,19 +114,19 @@ wharf --config   # show config path and current settings
 | `P` | Prune | Volumes, Images, System |
 | `Space` | Toggle select (bulk) | Projects |
 
-<details>
-<summary>Command Mode (Tab-autocomplete supported)</summary>
+</details>
 
-Press `:` then type a command, `Enter` to execute, `Tab` to autocomplete:
+<details>
+<summary>Command Mode (press <code>:</code> then Tab to autocomplete)</summary>
 
 | Command | Action |
 |---------|--------|
 | `:q` / `:q!` | Quit |
-| `:go <name>` | Jump to project by name |
-| `:exec <name>` | Exec into container by name |
+| `:host [url]` | Show / switch Docker host (ssh://, tcp://) |
+| `:go <n>` | Jump to project by name |
+| `:exec <n>` | Exec into container by name |
 | `:validate [name]` | Validate compose file |
 | `:theme dark/light` | Switch theme |
-| `:host` | Show current Docker host |
 | `:version` | Show version info |
 | `:save [path]` | Save logs to file (Logs view) |
 | `:edit` | Edit compose file (Compose view) |
@@ -169,7 +170,7 @@ keybindings:
   quit: "ctrl+q"
 ```
 
-Custom themes: `~/.config/wharf/themes/<name>.yaml`
+Custom themes: `~/.config/wharf/themes/<n>.yaml`
 
 ## Tech Stack
 

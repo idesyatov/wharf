@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/docker/cli/cli/connhelper"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
@@ -27,6 +29,47 @@ func NewClient() (*Client, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, fmt.Errorf("docker connect: %w", err)
+	}
+	return &Client{cli: cli}, nil
+}
+
+// NewClientWithHost creates a Docker client connected to a specific host.
+// Supports ssh://, tcp://, unix:// schemes.
+// For ssh:// uses connhelper which calls system ssh binary.
+// Pass empty string for default (same as NewClient).
+func NewClientWithHost(host string) (*Client, error) {
+	if host == "" {
+		return NewClient()
+	}
+
+	if strings.HasPrefix(host, "ssh://") {
+		helper, err := connhelper.GetConnectionHelper(host)
+		if err != nil {
+			return nil, fmt.Errorf("ssh helper %s: %w", host, err)
+		}
+		httpClient := &http.Client{
+			Transport: &http.Transport{
+				DialContext: helper.Dialer,
+			},
+		}
+		cli, err := client.NewClientWithOpts(
+			client.WithHTTPClient(httpClient),
+			client.WithHost(helper.Host),
+			client.WithAPIVersionNegotiation(),
+			client.WithDialContext(helper.Dialer),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("docker connect %s: %w", host, err)
+		}
+		return &Client{cli: cli}, nil
+	}
+
+	cli, err := client.NewClientWithOpts(
+		client.WithHost(host),
+		client.WithAPIVersionNegotiation(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("docker connect %s: %w", host, err)
 	}
 	return &Client{cli: cli}, nil
 }
