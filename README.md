@@ -28,6 +28,7 @@ A terminal UI for managing Docker Compose stacks. Inspired by [k9s](https://gith
 - Custom commands from config with template variables
 - Command mode with Tab-autocomplete (:exec, :go, :validate, :theme, :host...)
 - Remote Docker host via SSH (`:host ssh://user@server`)
+- Host Switcher (`H`) — saved hosts with add/delete, connect by name
 - Bookmark favorite projects (★), bulk operations (Space)
 - Vim-style navigation (hjkl, gg/G, /, :q, arrows)
 - Customizable themes (dark/light/custom YAML)
@@ -95,6 +96,7 @@ wharf --config   # show config path and current settings
 | `L` | View logs | Services, Detail |
 | `t` | Resource monitor (top) | Projects, Services |
 | `F` | Browse container files | Services, Detail |
+| `H` | Host Switcher | Projects |
 | | | |
 | `u` | Compose up | Projects |
 | `d` | Compose stop | Projects |
@@ -122,7 +124,8 @@ wharf --config   # show config path and current settings
 | Command | Action |
 |---------|--------|
 | `:q` / `:q!` | Quit |
-| `:host [url]` | Show / switch Docker host (ssh://, tcp://) |
+| `:host [name/url]` | Show / switch Docker host by name or URL (ssh://, tcp://) |
+| `:hosts` | Open Host Switcher view |
 | `:go <n>` | Jump to project by name |
 | `:exec <n>` | Exec into container by name |
 | `:validate [name]` | Validate compose file |
@@ -166,6 +169,11 @@ docker_host: ""
 mouse: false
 bookmarks:
   - my-project
+hosts:
+  - name: "prod"
+    url: "ssh://deploy@prod.example.com"
+  - name: "staging"
+    url: "ssh://deploy@staging.srv"
 keybindings:
   quit: "ctrl+q"
 ```

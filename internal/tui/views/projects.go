@@ -316,6 +316,8 @@ func (v ProjectsView) handleNavAndActions(msg tea.KeyMsg, keys ui.KeyMap, filter
 		return v, func() tea.Msg { return SwitchToEventsMsg{} }
 	case ui.MatchKey(msg, keys.SystemDf):
 		return v, func() tea.Msg { return SwitchToSystemMsg{} }
+	case msg.String() == "H":
+		return v, func() tea.Msg { return SwitchToHostsMsg{} }
 	default:
 		return v.handleProjectActions(msg, keys, filtered)
 	}

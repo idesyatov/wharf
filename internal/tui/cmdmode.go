@@ -11,6 +11,7 @@ var commandList = []string{
 	"q!",
 	"help",
 	"host",
+	"hosts",
 	"theme",
 	"version",
 	"save",
@@ -21,10 +22,11 @@ var commandList = []string{
 }
 
 type CmdMode struct {
-	active  bool
-	input   string
-	history []string
-	histIdx int
+	active    bool
+	input     string
+	history   []string
+	histIdx   int
+	hostNames []string
 }
 
 func (c *CmdMode) IsActive() bool { return c.active }
@@ -80,12 +82,41 @@ func (c *CmdMode) HandleKey(msg tea.KeyMsg) {
 	}
 }
 
+func (c *CmdMode) SetHostNames(names []string) {
+	c.hostNames = names
+}
+
 func (c *CmdMode) complete() {
 	input := strings.TrimSpace(c.input)
 	if input == "" {
 		return
 	}
 	parts := strings.Fields(input)
+
+	// Autocomplete argument for :host
+	if len(parts) >= 2 && parts[0] == "host" {
+		prefix := strings.ToLower(parts[1])
+		var matches []string
+		for _, name := range c.hostNames {
+			if strings.HasPrefix(strings.ToLower(name), prefix) {
+				matches = append(matches, name)
+			}
+		}
+		if len(matches) == 1 {
+			c.input = "host " + matches[0]
+		} else if len(matches) > 1 {
+			common := commonPrefix(matches)
+			if len(common) > len(prefix) {
+				c.input = "host " + common
+			}
+		}
+		return
+	}
+	// Also handle "host " with no arg typed yet — show nothing, just typed space
+	if len(parts) == 1 && strings.HasSuffix(c.input, " ") && parts[0] == "host" {
+		return
+	}
+
 	if len(parts) > 1 {
 		return
 	}

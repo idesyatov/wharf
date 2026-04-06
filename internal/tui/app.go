@@ -37,6 +37,7 @@ const (
 	viewHelp
 	viewTop
 	viewFileBrowser
+	viewHosts
 )
 
 type notificationClearMsg struct{}
@@ -67,6 +68,7 @@ type App struct {
 	helpView        views.HelpView
 	topView         views.TopView
 	fileBrowserView views.FileBrowserView
+	hostsView       views.HostsView
 	events          []docker.Event
 	eventsNew       int
 	eventsChan      <-chan docker.Event
@@ -186,6 +188,7 @@ func (a App) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	a.helpView = a.helpView.SetSize(msg.Width, h)
 	a.topView = a.topView.SetSize(msg.Width, h)
 	a.fileBrowserView = a.fileBrowserView.SetSize(msg.Width, h)
+	a.hostsView = a.hostsView.SetSize(msg.Width, h)
 	return a, nil
 }
 
@@ -210,6 +213,7 @@ func (a App) handleGlobalKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch {
 	case msg.String() == ":":
+		a.cmdMode.SetHostNames(a.cfg.HostNames())
 		a.cmdMode.Enter()
 		return a, nil
 	case ui.MatchKey(msg, a.keys.Quit):
@@ -254,6 +258,8 @@ func (a App) delegateToView(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.topView, cmd = a.topView.Update(msg, a.keys)
 	case viewFileBrowser:
 		a.fileBrowserView, cmd = a.fileBrowserView.Update(msg, a.keys)
+	case viewHosts:
+		a.hostsView, cmd = a.hostsView.Update(msg, a.keys)
 	}
 	return a, cmd
 }
@@ -548,6 +554,39 @@ func (a App) handleBuildAndEventsMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case views.SwitchBackFromEventsMsg:
 		a.state = a.prevState
 		return a, nil
+
+	// --- Hosts ---
+
+	case views.SwitchToHostsMsg:
+		a.prevState = a.state
+		a.state = viewHosts
+		a.hostsView = views.NewHostsView(a.cfg.Hosts, a.cfg.DockerHost).SetSize(a.width, a.height-7)
+		return a, nil
+
+	case views.SwitchBackFromHostsMsg:
+		a.state = a.prevState
+		return a, nil
+
+	case views.HostSelectedMsg:
+		return a, func() tea.Msg { return switchHostMsg{host: msg.URL} }
+
+	case views.HostDeleteMsg:
+		a.cfg.RemoveHost(msg.Name)
+		_ = a.cfg.Save()
+		a.hostsView = views.NewHostsView(a.cfg.Hosts, a.cfg.DockerHost).SetSize(a.width, a.height-7)
+		a.notification = "Host removed: " + msg.Name
+		a.notificationErr = false
+		a.notificationExp = time.Now().Add(2 * time.Second)
+		return a, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+
+	case views.HostAddMsg:
+		a.cfg.AddHost(msg.Name, msg.URL)
+		_ = a.cfg.Save()
+		a.hostsView = views.NewHostsView(a.cfg.Hosts, a.cfg.DockerHost).SetSize(a.width, a.height-7)
+		a.notification = "Host added: " + msg.Name
+		a.notificationErr = false
+		a.notificationExp = time.Now().Add(2 * time.Second)
+		return a, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
 
 	}
 	return a.handleSystemAndMiscMsg(msg)
@@ -1019,6 +1058,8 @@ func (a App) renderBreadcrumbs() string {
 		crumb = a.topView.Breadcrumb()
 	case viewFileBrowser:
 		crumb = a.fileBrowserView.Breadcrumb()
+	case viewHosts:
+		crumb = a.hostsView.Breadcrumb()
 	}
 
 	style := lipgloss.NewStyle().
@@ -1065,6 +1106,7 @@ func (a App) renderMenuBar() string {
 				ui.FormatMenuItem("i", "mages"),
 				ui.FormatMenuItem("E", "vents"),
 				ui.FormatMenuItem("D", "isk usage"),
+				ui.FormatMenuItem("H", "osts"),
 				ui.FormatMenuItem("*", "mark"),
 				ui.FormatMenuItem("/", "filter"),
 				ui.FormatMenuItem("?", "help"),
@@ -1121,6 +1163,12 @@ func (a App) renderMenuBar() string {
 		)
 	case viewEvents:
 		actionsLine = ""
+	case viewHosts:
+		actionsLine = joinMenuItems(
+			ui.FormatMenuItem("Enter", " connect"),
+			ui.FormatMenuItem("a", "dd"),
+			ui.FormatMenuItem("d", "elete"),
+		)
 	case viewSystem:
 		actionsLine = joinMenuItems(
 			ui.FormatMenuItem("P", "rune all"),
@@ -1181,6 +1229,8 @@ func (a App) renderContent() string {
 			viewContent = a.topView.View()
 		case viewFileBrowser:
 			viewContent = a.fileBrowserView.View()
+		case viewHosts:
+			viewContent = a.hostsView.View()
 		}
 	}
 
@@ -1236,6 +1286,10 @@ func (a App) renderConfirmDialog() string {
 	case viewSystem:
 		if a.systemView.PendingPrune() {
 			return ui.ErrorStyle.Render("Prune all unused resources (images, containers, volumes, build cache)? [y/N]")
+		}
+	case viewHosts:
+		if a.hostsView.PendingDelete() {
+			return ui.ErrorStyle.Render("Remove host \"" + a.hostsView.PendingDeleteName() + "\"? [y/N]")
 		}
 	}
 	return ""
@@ -1357,6 +1411,8 @@ func (a *App) executeCommand(cmd string) tea.Cmd {
 		return tea.Quit
 	case "help":
 		return func() tea.Msg { return views.SwitchToHelpMsg{} }
+	case "hosts":
+		return func() tea.Msg { return views.SwitchToHostsMsg{} }
 	case "host":
 		if len(parts) < 2 {
 			host := "local"
@@ -1373,6 +1429,15 @@ func (a *App) executeCommand(cmd string) tea.Cmd {
 		newHost := parts[1]
 		if newHost == "local" {
 			newHost = ""
+		} else if !strings.Contains(newHost, "://") {
+			if entry := a.cfg.FindHost(newHost); entry != nil {
+				newHost = entry.URL
+			} else {
+				a.notification = "Unknown host: " + parts[1]
+				a.notificationErr = true
+				a.notificationExp = time.Now().Add(3 * time.Second)
+				return tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+			}
 		}
 		return func() tea.Msg { return switchHostMsg{host: newHost} }
 	case "theme":

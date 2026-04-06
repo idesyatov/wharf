@@ -41,6 +41,12 @@ func (cc CustomCommand) Render(vars CommandVars) (string, error) {
 	return buf.String(), nil
 }
 
+// HostEntry defines a saved remote Docker host.
+type HostEntry struct {
+	Name string `yaml:"name"`
+	URL  string `yaml:"url"`
+}
+
 // Config holds all application settings loaded from config.yaml.
 type Config struct {
 	PollInterval   time.Duration     `yaml:"poll_interval"`
@@ -52,6 +58,7 @@ type Config struct {
 	DockerHost     string            `yaml:"docker_host"`
 	Mouse          bool              `yaml:"mouse"`
 	CustomCommands []CustomCommand   `yaml:"custom_commands"`
+	Hosts          []HostEntry       `yaml:"hosts"`
 }
 
 // Default returns a Config with default values.
@@ -108,6 +115,46 @@ func (c *Config) IsBookmarked(name string) bool {
 		}
 	}
 	return false
+}
+
+// FindHost returns the host entry by name, or nil if not found.
+func (c *Config) FindHost(name string) *HostEntry {
+	for i := range c.Hosts {
+		if c.Hosts[i].Name == name {
+			return &c.Hosts[i]
+		}
+	}
+	return nil
+}
+
+// HostNames returns a list of all saved host names.
+func (c *Config) HostNames() []string {
+	names := []string{"local"}
+	for _, h := range c.Hosts {
+		names = append(names, h.Name)
+	}
+	return names
+}
+
+// AddHost adds a host entry. If name already exists, updates URL.
+func (c *Config) AddHost(name, url string) {
+	for i := range c.Hosts {
+		if c.Hosts[i].Name == name {
+			c.Hosts[i].URL = url
+			return
+		}
+	}
+	c.Hosts = append(c.Hosts, HostEntry{Name: name, URL: url})
+}
+
+// RemoveHost removes a host entry by name.
+func (c *Config) RemoveHost(name string) {
+	for i := range c.Hosts {
+		if c.Hosts[i].Name == name {
+			c.Hosts = append(c.Hosts[:i], c.Hosts[i+1:]...)
+			return
+		}
+	}
 }
 
 func (c *Config) ToggleBookmark(name string) {
