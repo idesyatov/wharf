@@ -365,6 +365,14 @@ func (v ServicesView) handleNavAndActions(msg tea.KeyMsg, keys ui.KeyMap, filter
 		v.filterMode = true
 		v.filterText = ""
 		return v, nil
+	default:
+		return v.handleViewSwitches(msg, keys, filtered)
+	}
+	return v, nil
+}
+
+func (v ServicesView) handleViewSwitches(msg tea.KeyMsg, keys ui.KeyMap, filtered []docker.Service) (ServicesView, tea.Cmd) {
+	switch {
 	case ui.MatchKey(msg, keys.Help):
 		return v, func() tea.Msg { return SwitchToHelpMsg{} }
 	case ui.MatchKey(msg, keys.TopView):
@@ -428,14 +436,6 @@ func (v ServicesView) handleServiceTools(msg tea.KeyMsg, keys ui.KeyMap, filtere
 				return SwitchToFileBrowserMsg{ContainerID: ct.ID, ContainerName: ct.Name}
 			}
 		}
-	case ui.MatchKey(msg, keys.Compose):
-		return v, func() tea.Msg {
-			return SwitchToComposeMsg{ProjectName: v.project.Name, ProjectPath: v.project.Path}
-		}
-	case ui.MatchKey(msg, keys.VolumesKey):
-		return v, func() tea.Msg {
-			return SwitchToVolumesMsg{ProjectName: v.project.Name}
-		}
 	case ui.MatchKey(msg, keys.Exec):
 		if svc, ok := v.selectedService(); ok && len(svc.Containers) > 0 {
 			ct := svc.Containers[0]
@@ -445,6 +445,27 @@ func (v ServicesView) handleServiceTools(msg tea.KeyMsg, keys ui.KeyMap, filtere
 			return v, func() tea.Msg {
 				return ExecMsg{ContainerID: ct.ID, ContainerName: ct.Name, Image: svc.Image}
 			}
+		}
+	case ui.MatchKey(msg, keys.Copy):
+		if svc, ok := v.selectedService(); ok && len(svc.Containers) > 0 {
+			id := svc.Containers[0].ID
+			return v, func() tea.Msg { return CopyMsg{Text: id, Label: id} }
+		}
+	default:
+		return v.handleServiceSwitches(msg, keys, filtered)
+	}
+	return v, nil
+}
+
+func (v ServicesView) handleServiceSwitches(msg tea.KeyMsg, keys ui.KeyMap, filtered []docker.Service) (ServicesView, tea.Cmd) {
+	switch {
+	case ui.MatchKey(msg, keys.Compose):
+		return v, func() tea.Msg {
+			return SwitchToComposeMsg{ProjectName: v.project.Name, ProjectPath: v.project.Path}
+		}
+	case ui.MatchKey(msg, keys.VolumesKey):
+		return v, func() tea.Msg {
+			return SwitchToVolumesMsg{ProjectName: v.project.Name}
 		}
 	case ui.MatchKey(msg, keys.NetworksKey):
 		return v, func() tea.Msg {
@@ -460,32 +481,31 @@ func (v ServicesView) handleServiceTools(msg tea.KeyMsg, keys ui.KeyMap, filtere
 		return v, func() tea.Msg {
 			return BuildMsg{ProjectPath: v.project.Path, Service: ""}
 		}
-	case ui.MatchKey(msg, keys.Copy):
-		if svc, ok := v.selectedService(); ok && len(svc.Containers) > 0 {
-			id := svc.Containers[0].ID
-			return v, func() tea.Msg { return CopyMsg{Text: id, Label: id} }
-		}
 	case ui.MatchKey(msg, keys.EnvFile):
 		return v, func() tea.Msg {
 			return SwitchToEnvMsg{ProjectName: v.project.Name, ProjectPath: v.project.Path}
 		}
 	default:
-		if k := msg.String(); len(k) == 1 && k >= "1" && k <= "9" {
-			if cmd := v.matchCustomCommand(k, filtered); cmd != nil {
-				return v, cmd
-			}
-			if k <= "7" {
-				col := int(k[0]-'0') - 1
-				if v.sortColumn == col {
-					v.sortReverse = !v.sortReverse
-				} else {
-					v.sortColumn = col
-					v.sortReverse = false
-				}
+		return v.handleSortAndCustom(msg, filtered)
+	}
+	return v, nil
+}
+
+func (v ServicesView) handleSortAndCustom(msg tea.KeyMsg, filtered []docker.Service) (ServicesView, tea.Cmd) {
+	if k := msg.String(); len(k) == 1 && k >= "1" && k <= "9" {
+		if cmd := v.matchCustomCommand(k, filtered); cmd != nil {
+			return v, cmd
+		}
+		if k <= "7" {
+			col := int(k[0]-'0') - 1
+			if v.sortColumn == col {
+				v.sortReverse = !v.sortReverse
+			} else {
+				v.sortColumn = col
+				v.sortReverse = false
 			}
 		}
 	}
-
 	return v, nil
 }
 

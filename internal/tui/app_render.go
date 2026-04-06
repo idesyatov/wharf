@@ -117,97 +117,25 @@ func (a App) renderMenuBar() string {
 
 	switch a.state {
 	case viewProjects:
-		if a.projectsView.HasSelected() {
-			actionsLine = joinMenuItems(
-				fmt.Sprintf("%d selected", a.projectsView.SelectedCount()),
-				ui.FormatMenuItem("u", "p all"),
-				ui.FormatMenuItem("d", " stop all"),
-				ui.FormatMenuItem("X", " down all"),
-				ui.FormatMenuItem("R", " restart all"),
-				ui.FormatMenuItem("Esc", " clear"),
-			)
-			toolsLine = joinMenuItems(
-				ui.FormatMenuItem("Space", " toggle"),
-			)
-		} else {
-			actionsLine = joinMenuItems(
-				ui.FormatMenuItem("u", " compose up"),
-				ui.FormatMenuItem("d", " compose stop"),
-				ui.FormatMenuItem("X", " compose down"),
-				ui.FormatMenuItem("R", " compose restart"),
-			)
-			toolsLine = joinMenuItems(
-				ui.FormatMenuItem("t", "op"),
-				ui.FormatMenuItem("i", "mages"),
-				ui.FormatMenuItem("E", "vents"),
-				ui.FormatMenuItem("D", "isk usage"),
-				ui.FormatMenuItem("H", "osts"),
-				ui.FormatMenuItem("*", "mark"),
-				ui.FormatMenuItem("/", "filter"),
-				ui.FormatMenuItem("?", "help"),
-			)
-		}
+		actionsLine, toolsLine = a.menuProjects()
 	case viewServices:
-		actionsLine = joinMenuItems(
-			ui.FormatMenuItem("s", "tart"),
-			ui.FormatMenuItem("S", "top"),
-			ui.FormatMenuItem("r", "estart"),
-			ui.FormatMenuItem("e", "xec"),
-			ui.FormatMenuItem("L", "ogs"),
-		)
-		toolsItems := []string{
-			ui.FormatMenuItem("t", "op"),
-			ui.FormatMenuItem("F", "iles"),
-			ui.FormatMenuItem("b", "uild"),
-			ui.FormatMenuItem("c", "ompose"),
-			ui.FormatMenuItem("v", "ol"),
-			ui.FormatMenuItem("n", "et"),
-			ui.FormatMenuItem("/", "filter"),
-			ui.FormatMenuItem("?", "help"),
-		}
-		for _, cc := range a.servicesView.CustomCommands() {
-			toolsItems = append(toolsItems, ui.FormatMenuItem(cc.Key, " "+cc.Name))
-		}
-		toolsLine = joinMenuItems(toolsItems...)
+		actionsLine, toolsLine = a.menuServices()
 	case viewDetail:
-		actionsLine = joinMenuItems(
-			ui.FormatMenuItem("L", "ogs"),
-			ui.FormatMenuItem("e", "xec"),
-			ui.FormatMenuItem("F", "iles"),
-			ui.FormatMenuItem("y", "copy"),
-			ui.FormatMenuItem("Y", "copy+"),
-		)
+		actionsLine = a.menuDetail()
 	case viewCompose:
-		actionsLine = joinMenuItems(
-			ui.FormatMenuItem("e", "dit"),
-		)
+		actionsLine = a.menuCompose()
 	case viewLogs:
-		actionsLine = joinMenuItems(
-			ui.FormatMenuItem("f", "ollow"),
-			ui.FormatMenuItem("w", "save"),
-		)
+		actionsLine = a.menuLogs()
 	case viewVolumes:
-		actionsLine = joinMenuItems(
-			ui.FormatMenuItem("x", "remove"),
-			ui.FormatMenuItem("P", "rune"),
-		)
+		actionsLine = a.menuVolumes()
 	case viewImages:
-		actionsLine = joinMenuItems(
-			ui.FormatMenuItem("p", "ull"),
-			ui.FormatMenuItem("P", "rune"),
-		)
+		actionsLine = a.menuImages()
 	case viewEvents:
 		actionsLine = ""
 	case viewHosts:
-		actionsLine = joinMenuItems(
-			ui.FormatMenuItem("Enter", " connect"),
-			ui.FormatMenuItem("a", "dd"),
-			ui.FormatMenuItem("d", "elete"),
-		)
+		actionsLine = a.menuHosts()
 	case viewSystem:
-		actionsLine = joinMenuItems(
-			ui.FormatMenuItem("P", "rune all"),
-		)
+		actionsLine = a.menuSystem()
 	}
 
 	content := actionsLine
@@ -223,6 +151,111 @@ func (a App) renderMenuBar() string {
 		Padding(0, 1)
 
 	return style.Render(content)
+}
+
+func (a App) menuProjects() (string, string) {
+	if a.projectsView.HasSelected() {
+		return joinMenuItems(
+				fmt.Sprintf("%d selected", a.projectsView.SelectedCount()),
+				ui.FormatMenuItem("u", "p all"),
+				ui.FormatMenuItem("d", " stop all"),
+				ui.FormatMenuItem("X", " down all"),
+				ui.FormatMenuItem("R", " restart all"),
+				ui.FormatMenuItem("Esc", " clear"),
+			), joinMenuItems(
+				ui.FormatMenuItem("Space", " toggle"),
+			)
+	}
+	return joinMenuItems(
+			ui.FormatMenuItem("u", " compose up"),
+			ui.FormatMenuItem("d", " compose stop"),
+			ui.FormatMenuItem("X", " compose down"),
+			ui.FormatMenuItem("R", " compose restart"),
+		), joinMenuItems(
+			ui.FormatMenuItem("t", "op"),
+			ui.FormatMenuItem("i", "mages"),
+			ui.FormatMenuItem("E", "vents"),
+			ui.FormatMenuItem("D", "isk usage"),
+			ui.FormatMenuItem("H", "osts"),
+			ui.FormatMenuItem("*", "mark"),
+			ui.FormatMenuItem("/", "filter"),
+			ui.FormatMenuItem("?", "help"),
+		)
+}
+
+func (a App) menuServices() (string, string) {
+	actionsLine := joinMenuItems(
+		ui.FormatMenuItem("s", "tart"),
+		ui.FormatMenuItem("S", "top"),
+		ui.FormatMenuItem("r", "estart"),
+		ui.FormatMenuItem("e", "xec"),
+		ui.FormatMenuItem("L", "ogs"),
+	)
+	toolsItems := []string{
+		ui.FormatMenuItem("t", "op"),
+		ui.FormatMenuItem("F", "iles"),
+		ui.FormatMenuItem("b", "uild"),
+		ui.FormatMenuItem("c", "ompose"),
+		ui.FormatMenuItem("v", "ol"),
+		ui.FormatMenuItem("n", "et"),
+		ui.FormatMenuItem("/", "filter"),
+		ui.FormatMenuItem("?", "help"),
+	}
+	for _, cc := range a.servicesView.CustomCommands() {
+		toolsItems = append(toolsItems, ui.FormatMenuItem(cc.Key, " "+cc.Name))
+	}
+	return actionsLine, joinMenuItems(toolsItems...)
+}
+
+func (a App) menuDetail() string {
+	return joinMenuItems(
+		ui.FormatMenuItem("L", "ogs"),
+		ui.FormatMenuItem("e", "xec"),
+		ui.FormatMenuItem("F", "iles"),
+		ui.FormatMenuItem("y", "copy"),
+		ui.FormatMenuItem("Y", "copy+"),
+	)
+}
+
+func (a App) menuCompose() string {
+	return joinMenuItems(
+		ui.FormatMenuItem("e", "dit"),
+	)
+}
+
+func (a App) menuLogs() string {
+	return joinMenuItems(
+		ui.FormatMenuItem("f", "ollow"),
+		ui.FormatMenuItem("w", "save"),
+	)
+}
+
+func (a App) menuVolumes() string {
+	return joinMenuItems(
+		ui.FormatMenuItem("x", "remove"),
+		ui.FormatMenuItem("P", "rune"),
+	)
+}
+
+func (a App) menuImages() string {
+	return joinMenuItems(
+		ui.FormatMenuItem("p", "ull"),
+		ui.FormatMenuItem("P", "rune"),
+	)
+}
+
+func (a App) menuHosts() string {
+	return joinMenuItems(
+		ui.FormatMenuItem("Enter", " connect"),
+		ui.FormatMenuItem("a", "dd"),
+		ui.FormatMenuItem("d", "elete"),
+	)
+}
+
+func (a App) menuSystem() string {
+	return joinMenuItems(
+		ui.FormatMenuItem("P", "rune all"),
+	)
 }
 
 func (a App) renderContent() string {

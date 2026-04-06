@@ -107,159 +107,168 @@ func (a *App) executeCommand(cmd string) tea.Cmd {
 	case "hosts":
 		return func() tea.Msg { return views.SwitchToHostsMsg{} }
 	case "host":
-		if len(parts) < 2 {
-			host := "local"
-			if a.cfg.DockerHost != "" {
-				host = a.cfg.DockerHost
-			} else if dh := os.Getenv("DOCKER_HOST"); dh != "" {
-				host = dh
-			}
-			a.notification = "Docker host: " + host
-			a.notificationErr = false
-			a.notificationExp = time.Now().Add(3 * time.Second)
-			return tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
-		}
-		newHost := parts[1]
-		if newHost == "local" {
-			newHost = ""
-		} else if !strings.Contains(newHost, "://") {
-			if entry := a.cfg.FindHost(newHost); entry != nil {
-				newHost = entry.URL
-			} else {
-				a.notification = "Unknown host: " + parts[1]
-				a.notificationErr = true
-				a.notificationExp = time.Now().Add(3 * time.Second)
-				return tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
-			}
-		}
-		return func() tea.Msg { return switchHostMsg{host: newHost} }
+		return a.cmdHost(parts)
 	case "theme":
-		if len(parts) < 2 {
-			a.notification = "Usage: :theme dark|light"
-			a.notificationErr = true
-			a.notificationExp = time.Now().Add(3 * time.Second)
-			return tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
-		}
-		theme, err := ui.LoadTheme(parts[1])
-		if err != nil {
-			a.notification = "Theme error: " + err.Error()
-			a.notificationErr = true
-		} else {
-			ui.ApplyTheme(theme)
-			a.notification = "Theme: " + parts[1]
-			a.notificationErr = false
-		}
-		a.notificationExp = time.Now().Add(2 * time.Second)
-		return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+		return a.cmdTheme(parts)
 	case "version":
-		a.notification = "wharf " + version.Full()
+		return a.cmdVersion()
+	case "save":
+		return a.cmdSave(parts)
+	case "edit":
+		return a.cmdEdit()
+	case "go":
+		return a.cmdGo(parts)
+	case "exec":
+		return a.cmdExec(parts)
+	case "validate":
+		return a.cmdValidate(parts)
+	default:
+		return a.notifyErr("Unknown command: "+cmd, 2*time.Second)
+	}
+}
+
+func (a *App) notifyErr(msg string, dur time.Duration) tea.Cmd {
+	a.notification = msg
+	a.notificationErr = true
+	a.notificationExp = time.Now().Add(dur)
+	return tea.Tick(dur, func(time.Time) tea.Msg { return notificationClearMsg{} })
+}
+
+func (a *App) cmdHost(parts []string) tea.Cmd {
+	if len(parts) < 2 {
+		host := "local"
+		if a.cfg.DockerHost != "" {
+			host = a.cfg.DockerHost
+		} else if dh := os.Getenv("DOCKER_HOST"); dh != "" {
+			host = dh
+		}
+		a.notification = "Docker host: " + host
 		a.notificationErr = false
 		a.notificationExp = time.Now().Add(3 * time.Second)
 		return tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
-	case "save":
-		if a.state == viewLogs {
-			path := ""
-			if len(parts) > 1 {
-				path = parts[1]
-			}
-			return func() tea.Msg { return views.SaveLogsMsg{Path: path} }
+	}
+	newHost := parts[1]
+	if newHost == "local" {
+		newHost = ""
+	} else if !strings.Contains(newHost, "://") {
+		if entry := a.cfg.FindHost(newHost); entry != nil {
+			newHost = entry.URL
+		} else {
+			return a.notifyErr("Unknown host: "+parts[1], 3*time.Second)
 		}
-		a.notification = "save: only available in Logs view"
+	}
+	return func() tea.Msg { return switchHostMsg{host: newHost} }
+}
+
+func (a *App) cmdTheme(parts []string) tea.Cmd {
+	if len(parts) < 2 {
+		return a.notifyErr("Usage: :theme dark|light", 3*time.Second)
+	}
+	theme, err := ui.LoadTheme(parts[1])
+	if err != nil {
+		a.notification = "Theme error: " + err.Error()
 		a.notificationErr = true
-		a.notificationExp = time.Now().Add(2 * time.Second)
-		return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
-	case "edit":
-		if a.state == viewCompose && a.composeView.FilePath() != "" {
-			editor := util.DetectEditor()
-			fp := a.composeView.FilePath()
-			c := exec.Command(editor, fp)
-			return tea.ExecProcess(c, func(err error) tea.Msg {
-				return views.EditComposeDoneMsg{Err: err, FilePath: fp}
-			})
+	} else {
+		ui.ApplyTheme(theme)
+		a.notification = "Theme: " + parts[1]
+		a.notificationErr = false
+	}
+	a.notificationExp = time.Now().Add(2 * time.Second)
+	return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+}
+
+func (a *App) cmdVersion() tea.Cmd {
+	a.notification = "wharf " + version.Full()
+	a.notificationErr = false
+	a.notificationExp = time.Now().Add(3 * time.Second)
+	return tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+}
+
+func (a *App) cmdSave(parts []string) tea.Cmd {
+	if a.state == viewLogs {
+		path := ""
+		if len(parts) > 1 {
+			path = parts[1]
 		}
-		a.notification = "edit: only available in Compose view"
-		a.notificationErr = true
-		a.notificationExp = time.Now().Add(2 * time.Second)
-		return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
-	case "go":
-		if len(parts) < 2 {
-			a.notification = "Usage: :go <project-name>"
-			a.notificationErr = true
+		return func() tea.Msg { return views.SaveLogsMsg{Path: path} }
+	}
+	return a.notifyErr("save: only available in Logs view", 2*time.Second)
+}
+
+func (a *App) cmdEdit() tea.Cmd {
+	if a.state == viewCompose && a.composeView.FilePath() != "" {
+		editor := util.DetectEditor()
+		fp := a.composeView.FilePath()
+		c := exec.Command(editor, fp)
+		return tea.ExecProcess(c, func(err error) tea.Msg {
+			return views.EditComposeDoneMsg{Err: err, FilePath: fp}
+		})
+	}
+	return a.notifyErr("edit: only available in Compose view", 2*time.Second)
+}
+
+func (a *App) cmdGo(parts []string) tea.Cmd {
+	if len(parts) < 2 {
+		return a.notifyErr("Usage: :go <project-name>", 2*time.Second)
+	}
+	query := strings.ToLower(parts[1])
+	for _, p := range a.projectsView.Projects() {
+		if strings.Contains(strings.ToLower(p.Name), query) {
+			a.state = viewServices
+			a.servicesView = views.NewServicesView(p, a.cfg.CustomCommands).SetSize(a.width, a.height-7)
+			a.notification = "→ " + p.Name
+			a.notificationErr = false
 			a.notificationExp = time.Now().Add(2 * time.Second)
 			return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
 		}
+	}
+	return a.notifyErr("Project not found: "+parts[1], 2*time.Second)
+}
+
+func (a *App) cmdExec(parts []string) tea.Cmd {
+	if len(parts) < 2 {
+		return a.notifyErr("Usage: :exec <container-name>", 2*time.Second)
+	}
+	ct := a.findContainerByName(parts[1])
+	if ct == nil {
+		return a.notifyErr("Container not found: "+parts[1], 2*time.Second)
+	}
+	shell := a.docker.DetectShell(context.Background(), ct.ID)
+	banner := fmt.Sprintf(
+		"echo '─────────────────────────────────────────' && "+
+			"echo '  ⚓ Wharf — Container Shell' && "+
+			"echo '  Container: %s' && "+
+			"echo '  Image:     %s' && "+
+			"echo '  Shell:     %s' && "+
+			"echo '  Exit:      type exit or Ctrl+D' && "+
+			"echo '─────────────────────────────────────────' && "+
+			"exec %s",
+		ct.Name, ct.Image, shell, shell,
+	)
+	c := exec.Command("docker", "exec", "-it", ct.ID, "sh", "-c", banner)
+	return tea.ExecProcess(c, func(err error) tea.Msg {
+		return views.ExecDoneMsg{Err: err}
+	})
+}
+
+func (a *App) cmdValidate(parts []string) tea.Cmd {
+	var projectPath string
+	if a.state == viewServices {
+		projectPath = a.servicesView.ProjectPath()
+	}
+	if len(parts) > 1 {
 		query := strings.ToLower(parts[1])
 		for _, p := range a.projectsView.Projects() {
 			if strings.Contains(strings.ToLower(p.Name), query) {
-				a.state = viewServices
-				a.servicesView = views.NewServicesView(p, a.cfg.CustomCommands).SetSize(a.width, a.height-7)
-				a.notification = "→ " + p.Name
-				a.notificationErr = false
-				a.notificationExp = time.Now().Add(2 * time.Second)
-				return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+				projectPath = p.Path
+				break
 			}
 		}
-		a.notification = "Project not found: " + parts[1]
-		a.notificationErr = true
-		a.notificationExp = time.Now().Add(2 * time.Second)
-		return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
-	case "exec":
-		if len(parts) < 2 {
-			a.notification = "Usage: :exec <container-name>"
-			a.notificationErr = true
-			a.notificationExp = time.Now().Add(2 * time.Second)
-			return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
-		}
-		ct := a.findContainerByName(parts[1])
-		if ct == nil {
-			a.notification = "Container not found: " + parts[1]
-			a.notificationErr = true
-			a.notificationExp = time.Now().Add(2 * time.Second)
-			return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
-		}
-		shell := a.docker.DetectShell(context.Background(), ct.ID)
-		banner := fmt.Sprintf(
-			"echo '─────────────────────────────────────────' && "+
-				"echo '  ⚓ Wharf — Container Shell' && "+
-				"echo '  Container: %s' && "+
-				"echo '  Image:     %s' && "+
-				"echo '  Shell:     %s' && "+
-				"echo '  Exit:      type exit or Ctrl+D' && "+
-				"echo '─────────────────────────────────────────' && "+
-				"exec %s",
-			ct.Name, ct.Image, shell, shell,
-		)
-		c := exec.Command("docker", "exec", "-it", ct.ID, "sh", "-c", banner)
-		return tea.ExecProcess(c, func(err error) tea.Msg {
-			return views.ExecDoneMsg{Err: err}
-		})
-	case "validate":
-		var projectPath string
-		if a.state == viewServices {
-			projectPath = a.servicesView.ProjectPath()
-		}
-		if len(parts) > 1 {
-			query := strings.ToLower(parts[1])
-			for _, p := range a.projectsView.Projects() {
-				if strings.Contains(strings.ToLower(p.Name), query) {
-					projectPath = p.Path
-					break
-				}
-			}
-		}
-		if projectPath == "" {
-			a.notification = "validate: navigate to a project or use :validate <name>"
-			a.notificationErr = true
-			a.notificationExp = time.Now().Add(3 * time.Second)
-			return tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
-		}
-		return a.validateCompose(projectPath)
-	default:
-		a.notification = "Unknown command: " + cmd
-		a.notificationErr = true
-		a.notificationExp = time.Now().Add(2 * time.Second)
-		return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
 	}
+	if projectPath == "" {
+		return a.notifyErr("validate: navigate to a project or use :validate <name>", 3*time.Second)
+	}
+	return a.validateCompose(projectPath)
 }
 
 func (a *App) findContainerByName(name string) *docker.Container {

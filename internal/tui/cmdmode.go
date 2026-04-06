@@ -95,21 +95,7 @@ func (c *CmdMode) complete() {
 
 	// Autocomplete argument for :host
 	if len(parts) >= 2 && parts[0] == "host" {
-		prefix := strings.ToLower(parts[1])
-		var matches []string
-		for _, name := range c.hostNames {
-			if strings.HasPrefix(strings.ToLower(name), prefix) {
-				matches = append(matches, name)
-			}
-		}
-		if len(matches) == 1 {
-			c.input = "host " + matches[0]
-		} else if len(matches) > 1 {
-			common := commonPrefix(matches)
-			if len(common) > len(prefix) {
-				c.input = "host " + common
-			}
-		}
+		c.completeHostArg(parts[1])
 		return
 	}
 	// Also handle "host " with no arg typed yet — show nothing, just typed space
@@ -120,7 +106,29 @@ func (c *CmdMode) complete() {
 	if len(parts) > 1 {
 		return
 	}
-	prefix := strings.ToLower(parts[0])
+	c.completeCommand(parts[0])
+}
+
+func (c *CmdMode) completeHostArg(arg string) {
+	prefix := strings.ToLower(arg)
+	var matches []string
+	for _, name := range c.hostNames {
+		if strings.HasPrefix(strings.ToLower(name), prefix) {
+			matches = append(matches, name)
+		}
+	}
+	if len(matches) == 1 {
+		c.input = "host " + matches[0]
+	} else if len(matches) > 1 {
+		common := commonPrefix(matches)
+		if len(common) > len(prefix) {
+			c.input = "host " + common
+		}
+	}
+}
+
+func (c *CmdMode) completeCommand(word string) {
+	prefix := strings.ToLower(word)
 	var matches []string
 	for _, cmd := range commandList {
 		if strings.HasPrefix(cmd, prefix) {

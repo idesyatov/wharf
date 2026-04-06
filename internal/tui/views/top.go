@@ -312,106 +312,11 @@ func (v TopView) renderContainer() string {
 		memPct = float64(s.MemUsage) / float64(s.MemLimit) * 100
 	}
 
-	cpuStyle := colorByLevel(s.CPUPercent, 100)
-	memStyle := colorByLevel(memPct, 100)
+	chartHeight := v.containerChartHeight()
+	cpuFull := v.renderCPUChart(s, chartHeight)
+	memFull := v.renderMemChart(s, memPct, chartHeight)
+	netFull := v.renderNetChart()
 
-	chartHeight := v.height - 22
-	if chartHeight < 3 {
-		chartHeight = 3
-	}
-	if chartHeight > 12 {
-		chartHeight = 12
-	}
-
-	cw := v.chartWidth
-
-	cpuMax := maxInSlice(v.cpuHistory)
-	if cpuMax < 1 {
-		cpuMax = 1
-	}
-	cpuMax = cpuMax * 1.1
-	if cpuMax > 100 {
-		cpuMax = 100
-	}
-
-	memMax := maxInSlice(v.memHistory)
-	if memMax < 1 {
-		memMax = 1
-	}
-	memMax = memMax * 1.2
-
-	cpuChartText := ui.BrailleChart(v.cpuHistory, cpuMax, cw, chartHeight)
-	memChartText := ui.BrailleChart(v.memHistory, memMax, cw, chartHeight)
-
-	cpuColored := colorChartByZones(cpuChartText)
-	memColored := memStyle.Render(memChartText)
-
-	chartBoxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(ui.ColorBorder).
-		Width(cw)
-
-	cpuBox := chartBoxStyle.Render(cpuColored)
-	memBox := chartBoxStyle.Render(memColored)
-
-	cpuLabel := cpuStyle.Render(fmt.Sprintf("CPU [%s]", formatCPU(s.CPUPercent)))
-	memLabel := memStyle.Render(fmt.Sprintf("MEM [%s / %s · %.1f%%]",
-		formatMemory(s.MemUsage), formatMemory(s.MemLimit), memPct))
-
-	cpuFull := cpuLabel + "\n" + cpuBox
-	memFull := memLabel + "\n" + memBox
-
-	// Net I/O chart
-	var netFull string
-	if len(v.netRxHistory) > 0 || len(v.netTxHistory) > 0 {
-		rxRate := 0.0
-		if len(v.netRxHistory) > 0 {
-			rxRate = v.netRxHistory[len(v.netRxHistory)-1]
-		}
-		txRate := 0.0
-		if len(v.netTxHistory) > 0 {
-			txRate = v.netTxHistory[len(v.netTxHistory)-1]
-		}
-
-		netLabel := ui.MutedStyle.Render(fmt.Sprintf("Net I/O [↓ %s/s  ↑ %s/s]",
-			formatMemory(uint64(rxRate)), formatMemory(uint64(txRate))))
-
-		netMiniHeight := 3
-		nw := v.netChartWidth
-
-		rxMax := maxInSlice(v.netRxHistory)
-		if rxMax < 1 {
-			rxMax = 1
-		}
-		rxMax *= 1.2
-		txMax := maxInSlice(v.netTxHistory)
-		if txMax < 1 {
-			txMax = 1
-		}
-		txMax *= 1.2
-
-		rxChart := ui.BrailleChart(v.netRxHistory, rxMax, nw, netMiniHeight)
-		txChart := ui.BrailleChart(v.netTxHistory, txMax, nw, netMiniHeight)
-
-		rxColored := colorChartByZones(rxChart)
-		txColored := colorChartByZones(txChart)
-
-		separator := ui.MutedStyle.Render(strings.Repeat("─", nw))
-		rxLabel := lipgloss.NewStyle().Foreground(ui.ColorSuccess).Render("RX")
-		txLabel := lipgloss.NewStyle().Foreground(ui.ColorSuccess).Render("TX")
-
-		netContent := rxLabel + "\n" + rxColored + "\n" + separator + "\n" + txLabel + "\n" + txColored
-
-		netBoxStyle := lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(ui.ColorBorder).
-			Width(nw)
-
-		netBox := netBoxStyle.Render(netContent)
-		netFull = netLabel + "\n" + netBox
-	}
-
-	// Fallback net line (before first delta is calculated)
 	netLine := fmt.Sprintf("  Net RX: %s    Net TX: %s",
 		formatMemory(s.NetRx), formatMemory(s.NetTx))
 
@@ -433,6 +338,116 @@ func (v TopView) renderContainer() string {
 		return header + "\n\n" + indent.Render(charts)
 	}
 	return header + "\n\n" + indent.Render(charts) + "\n\n" + netLine
+}
+
+func (v TopView) containerChartHeight() int {
+	chartHeight := v.height - 22
+	if chartHeight < 3 {
+		chartHeight = 3
+	}
+	if chartHeight > 12 {
+		chartHeight = 12
+	}
+	return chartHeight
+}
+
+func (v TopView) renderCPUChart(s docker.Stats, chartHeight int) string {
+	cw := v.chartWidth
+	cpuStyle := colorByLevel(s.CPUPercent, 100)
+
+	cpuMax := maxInSlice(v.cpuHistory)
+	if cpuMax < 1 {
+		cpuMax = 1
+	}
+	cpuMax = cpuMax * 1.1
+	if cpuMax > 100 {
+		cpuMax = 100
+	}
+
+	cpuChartText := ui.BrailleChart(v.cpuHistory, cpuMax, cw, chartHeight)
+	cpuColored := colorChartByZones(cpuChartText)
+
+	chartBoxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(ui.ColorBorder).
+		Width(cw)
+
+	cpuLabel := cpuStyle.Render(fmt.Sprintf("CPU [%s]", formatCPU(s.CPUPercent)))
+	return cpuLabel + "\n" + chartBoxStyle.Render(cpuColored)
+}
+
+func (v TopView) renderMemChart(s docker.Stats, memPct float64, chartHeight int) string {
+	cw := v.chartWidth
+	memStyle := colorByLevel(memPct, 100)
+
+	memMax := maxInSlice(v.memHistory)
+	if memMax < 1 {
+		memMax = 1
+	}
+	memMax = memMax * 1.2
+
+	memChartText := ui.BrailleChart(v.memHistory, memMax, cw, chartHeight)
+	memColored := memStyle.Render(memChartText)
+
+	chartBoxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(ui.ColorBorder).
+		Width(cw)
+
+	memLabel := memStyle.Render(fmt.Sprintf("MEM [%s / %s · %.1f%%]",
+		formatMemory(s.MemUsage), formatMemory(s.MemLimit), memPct))
+	return memLabel + "\n" + chartBoxStyle.Render(memColored)
+}
+
+func (v TopView) renderNetChart() string {
+	if len(v.netRxHistory) == 0 && len(v.netTxHistory) == 0 {
+		return ""
+	}
+
+	rxRate := 0.0
+	if len(v.netRxHistory) > 0 {
+		rxRate = v.netRxHistory[len(v.netRxHistory)-1]
+	}
+	txRate := 0.0
+	if len(v.netTxHistory) > 0 {
+		txRate = v.netTxHistory[len(v.netTxHistory)-1]
+	}
+
+	netLabel := ui.MutedStyle.Render(fmt.Sprintf("Net I/O [↓ %s/s  ↑ %s/s]",
+		formatMemory(uint64(rxRate)), formatMemory(uint64(txRate))))
+
+	netMiniHeight := 3
+	nw := v.netChartWidth
+
+	rxMax := maxInSlice(v.netRxHistory)
+	if rxMax < 1 {
+		rxMax = 1
+	}
+	rxMax *= 1.2
+	txMax := maxInSlice(v.netTxHistory)
+	if txMax < 1 {
+		txMax = 1
+	}
+	txMax *= 1.2
+
+	rxChart := ui.BrailleChart(v.netRxHistory, rxMax, nw, netMiniHeight)
+	txChart := ui.BrailleChart(v.netTxHistory, txMax, nw, netMiniHeight)
+
+	rxColored := colorChartByZones(rxChart)
+	txColored := colorChartByZones(txChart)
+
+	separator := ui.MutedStyle.Render(strings.Repeat("─", nw))
+	rxLabel := lipgloss.NewStyle().Foreground(ui.ColorSuccess).Render("RX")
+	txLabel := lipgloss.NewStyle().Foreground(ui.ColorSuccess).Render("TX")
+
+	netContent := rxLabel + "\n" + rxColored + "\n" + separator + "\n" + txLabel + "\n" + txColored
+
+	netBoxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(ui.ColorBorder).
+		Width(nw)
+
+	return netLabel + "\n" + netBoxStyle.Render(netContent)
 }
 
 func LoadTopStats(client *docker.Client, project docker.Project) tea.Cmd {

@@ -192,91 +192,107 @@ func (a App) handleViewSwitch(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (a App) handleResourceMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case views.SwitchToVolumesMsg:
-		a.prevState = a.state
-		a.state = viewVolumes
-		a.volumesView = views.NewVolumesView(msg.ProjectName).SetSize(a.width, a.height-5)
-		return a, views.LoadVolumes(a.docker, msg.ProjectName)
-
+		return a.handleSwitchToVolumes(msg)
 	case views.SwitchBackFromVolumesMsg:
 		a.state = viewServices
 		return a, nil
-
 	case views.VolumesLoadedMsg:
-		a.volumesView, _ = a.volumesView.Update(msg, a.keys)
-		return a, nil
-
+		return a.handleVolumesLoaded(msg)
 	case views.VolumeRemovedMsg:
-		if msg.Err != nil {
-			a.notification = "remove " + msg.VolumeName + ": " + msg.Err.Error()
-			a.notificationErr = true
-		} else {
-			a.notification = "removed " + msg.VolumeName
-			a.notificationErr = false
-		}
-		a.notificationExp = time.Now().Add(3 * time.Second)
-		return a, tea.Batch(
-			views.LoadVolumes(a.docker, a.volumesView.ProjectName()),
-			tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} }),
-		)
-
+		return a.handleVolumeRemoved(msg)
 	case views.VolumesPrunedMsg:
-		if msg.Err != nil {
-			a.notification = "prune: " + msg.Err.Error()
-			a.notificationErr = true
-		} else {
-			a.notification = fmt.Sprintf("pruned %d volumes, reclaimed %s", msg.Count, views.FormatBytes(msg.Reclaimed))
-			a.notificationErr = false
-		}
-		a.notificationExp = time.Now().Add(3 * time.Second)
-		return a, tea.Batch(
-			views.LoadVolumes(a.docker, a.volumesView.ProjectName()),
-			tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} }),
-		)
-
+		return a.handleVolumesPruned(msg)
 	case views.RemoveVolumeMsg:
 		return a, views.RemoveVolume(a.docker, msg.Name)
-
 	case views.PruneVolumesActionMsg:
 		return a, views.PruneVolumes(a.docker)
-
 	case views.SwitchToNetworksMsg:
-		a.prevState = a.state
-		a.state = viewNetworks
-		a.networksView = views.NewNetworksView(msg.ProjectName).SetSize(a.width, a.height-5)
-		return a, views.LoadNetworks(a.docker, msg.ProjectName)
-
+		return a.handleSwitchToNetworks(msg)
 	case views.SwitchBackFromNetworksMsg:
 		a.state = viewServices
 		return a, nil
-
 	case views.NetworksLoadedMsg:
 		a.networksView, _ = a.networksView.Update(msg, a.keys)
 		return a, nil
-
 	case views.BookmarkToggleMsg:
-		if a.cfg != nil {
-			a.cfg.ToggleBookmark(msg.ProjectName)
-			_ = a.cfg.Save()
-			if a.cfg.IsBookmarked(msg.ProjectName) {
-				a.notification = "★ " + msg.ProjectName
-			} else {
-				a.notification = "☆ " + msg.ProjectName
-			}
-			a.notificationErr = false
-			a.notificationExp = time.Now().Add(2 * time.Second)
-			return a, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
-		}
-		return a, nil
-
+		return a.handleBookmarkToggle(msg)
 	case views.CopyMsg:
-		ui.CopyToClipboard(msg.Text)
-		a.notification = "Copied: " + msg.Label
+		return a.handleCopy(msg)
+	}
+	return a.handleToolMsg(msg)
+}
+
+func (a App) handleSwitchToVolumes(msg views.SwitchToVolumesMsg) (tea.Model, tea.Cmd) {
+	a.prevState = a.state
+	a.state = viewVolumes
+	a.volumesView = views.NewVolumesView(msg.ProjectName).SetSize(a.width, a.height-5)
+	return a, views.LoadVolumes(a.docker, msg.ProjectName)
+}
+
+func (a App) handleVolumesLoaded(msg views.VolumesLoadedMsg) (tea.Model, tea.Cmd) {
+	a.volumesView, _ = a.volumesView.Update(msg, a.keys)
+	return a, nil
+}
+
+func (a App) handleVolumeRemoved(msg views.VolumeRemovedMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		a.notification = "remove " + msg.VolumeName + ": " + msg.Err.Error()
+		a.notificationErr = true
+	} else {
+		a.notification = "removed " + msg.VolumeName
+		a.notificationErr = false
+	}
+	a.notificationExp = time.Now().Add(3 * time.Second)
+	return a, tea.Batch(
+		views.LoadVolumes(a.docker, a.volumesView.ProjectName()),
+		tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} }),
+	)
+}
+
+func (a App) handleVolumesPruned(msg views.VolumesPrunedMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		a.notification = "prune: " + msg.Err.Error()
+		a.notificationErr = true
+	} else {
+		a.notification = fmt.Sprintf("pruned %d volumes, reclaimed %s", msg.Count, views.FormatBytes(msg.Reclaimed))
+		a.notificationErr = false
+	}
+	a.notificationExp = time.Now().Add(3 * time.Second)
+	return a, tea.Batch(
+		views.LoadVolumes(a.docker, a.volumesView.ProjectName()),
+		tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} }),
+	)
+}
+
+func (a App) handleSwitchToNetworks(msg views.SwitchToNetworksMsg) (tea.Model, tea.Cmd) {
+	a.prevState = a.state
+	a.state = viewNetworks
+	a.networksView = views.NewNetworksView(msg.ProjectName).SetSize(a.width, a.height-5)
+	return a, views.LoadNetworks(a.docker, msg.ProjectName)
+}
+
+func (a App) handleBookmarkToggle(msg views.BookmarkToggleMsg) (tea.Model, tea.Cmd) {
+	if a.cfg != nil {
+		a.cfg.ToggleBookmark(msg.ProjectName)
+		_ = a.cfg.Save()
+		if a.cfg.IsBookmarked(msg.ProjectName) {
+			a.notification = "★ " + msg.ProjectName
+		} else {
+			a.notification = "☆ " + msg.ProjectName
+		}
 		a.notificationErr = false
 		a.notificationExp = time.Now().Add(2 * time.Second)
 		return a, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
-
 	}
-	return a.handleToolMsg(msg)
+	return a, nil
+}
+
+func (a App) handleCopy(msg views.CopyMsg) (tea.Model, tea.Cmd) {
+	ui.CopyToClipboard(msg.Text)
+	a.notification = "Copied: " + msg.Label
+	a.notificationErr = false
+	a.notificationExp = time.Now().Add(2 * time.Second)
+	return a, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
 }
 
 func (a App) handleToolMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -339,103 +355,117 @@ func (a App) handleToolMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (a App) handleBuildAndEventsMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case views.BuildMsg:
-		composePath := ""
-		if msg.ComposePath != "" {
-			composePath = msg.ComposePath
-		}
-		_ = composePath // ComposeBuild finds file itself
-		svcName := msg.Service
-		if svcName == "" {
-			svcName = "all"
-		}
-		args := []string{"compose"}
-		if msg.ProjectPath != "" {
-			cf, err := docker.FindComposeFile(msg.ProjectPath)
-			if err == nil {
-				args = append(args, "-f", cf)
-			}
-		}
-		args = append(args, "build")
-		if msg.Service != "" {
-			args = append(args, msg.Service)
-		}
-		c := exec.Command("docker", args...)
-		c.Dir = msg.ProjectPath
-		return a, tea.ExecProcess(c, func(err error) tea.Msg {
-			return views.BuildDoneMsg{Err: err, Service: svcName}
-		})
-
+		return a.handleBuild(msg)
 	case views.BuildDoneMsg:
-		if msg.Err != nil {
-			a.notification = "build " + msg.Service + ": " + msg.Err.Error()
-			a.notificationErr = true
-		} else {
-			a.notification = "build " + msg.Service + ": OK"
-			a.notificationErr = false
-		}
-		a.notificationExp = time.Now().Add(3 * time.Second)
-		return a, tea.Tick(3*time.Second, func(time.Time) tea.Msg {
-			return notificationClearMsg{}
-		})
-
-	// --- Events ---
-
+		return a.handleBuildDone(msg)
 	case views.EventReceivedMsg:
-		a.events = append(a.events, msg.Event)
-		if len(a.events) > 50 {
-			a.events = a.events[len(a.events)-50:]
-		}
-		if a.state != viewEvents {
-			a.eventsNew++
-		}
-		return a, a.listenEvent()
-
+		return a.handleEventReceived(msg)
 	case views.SwitchToEventsMsg:
-		a.prevState = a.state
-		a.state = viewEvents
-		a.eventsNew = 0
-		a.eventsView = views.NewEventsView(a.events).SetSize(a.width, a.height-6)
-		return a, nil
-
+		return a.handleSwitchToEvents(msg)
 	case views.SwitchBackFromEventsMsg:
 		a.state = a.prevState
 		return a, nil
-
-	// --- Hosts ---
-
 	case views.SwitchToHostsMsg:
-		a.prevState = a.state
-		a.state = viewHosts
-		a.hostsView = views.NewHostsView(a.cfg.Hosts, a.cfg.DockerHost).SetSize(a.width, a.height-7)
-		return a, nil
-
+		return a.handleSwitchToHosts(msg)
 	case views.SwitchBackFromHostsMsg:
 		a.state = a.prevState
 		return a, nil
-
 	case views.HostSelectedMsg:
 		return a, func() tea.Msg { return switchHostMsg{host: msg.URL} }
-
 	case views.HostDeleteMsg:
-		a.cfg.RemoveHost(msg.Name)
-		_ = a.cfg.Save()
-		a.hostsView = views.NewHostsView(a.cfg.Hosts, a.cfg.DockerHost).SetSize(a.width, a.height-7)
-		a.notification = "Host removed: " + msg.Name
-		a.notificationErr = false
-		a.notificationExp = time.Now().Add(2 * time.Second)
-		return a, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
-
+		return a.handleHostDelete(msg)
 	case views.HostAddMsg:
-		a.cfg.AddHost(msg.Name, msg.URL)
-		_ = a.cfg.Save()
-		a.hostsView = views.NewHostsView(a.cfg.Hosts, a.cfg.DockerHost).SetSize(a.width, a.height-7)
-		a.notification = "Host added: " + msg.Name
-		a.notificationErr = false
-		a.notificationExp = time.Now().Add(2 * time.Second)
-		return a, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
-
+		return a.handleHostAdd(msg)
 	}
 	return a.handleSystemAndMiscMsg(msg)
+}
+
+func (a App) handleBuild(msg views.BuildMsg) (tea.Model, tea.Cmd) {
+	composePath := ""
+	if msg.ComposePath != "" {
+		composePath = msg.ComposePath
+	}
+	_ = composePath // ComposeBuild finds file itself
+	svcName := msg.Service
+	if svcName == "" {
+		svcName = "all"
+	}
+	args := []string{"compose"}
+	if msg.ProjectPath != "" {
+		cf, err := docker.FindComposeFile(msg.ProjectPath)
+		if err == nil {
+			args = append(args, "-f", cf)
+		}
+	}
+	args = append(args, "build")
+	if msg.Service != "" {
+		args = append(args, msg.Service)
+	}
+	c := exec.Command("docker", args...)
+	c.Dir = msg.ProjectPath
+	return a, tea.ExecProcess(c, func(err error) tea.Msg {
+		return views.BuildDoneMsg{Err: err, Service: svcName}
+	})
+}
+
+func (a App) handleBuildDone(msg views.BuildDoneMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		a.notification = "build " + msg.Service + ": " + msg.Err.Error()
+		a.notificationErr = true
+	} else {
+		a.notification = "build " + msg.Service + ": OK"
+		a.notificationErr = false
+	}
+	a.notificationExp = time.Now().Add(3 * time.Second)
+	return a, tea.Tick(3*time.Second, func(time.Time) tea.Msg {
+		return notificationClearMsg{}
+	})
+}
+
+func (a App) handleEventReceived(msg views.EventReceivedMsg) (tea.Model, tea.Cmd) {
+	a.events = append(a.events, msg.Event)
+	if len(a.events) > 50 {
+		a.events = a.events[len(a.events)-50:]
+	}
+	if a.state != viewEvents {
+		a.eventsNew++
+	}
+	return a, a.listenEvent()
+}
+
+func (a App) handleSwitchToEvents(msg views.SwitchToEventsMsg) (tea.Model, tea.Cmd) {
+	a.prevState = a.state
+	a.state = viewEvents
+	a.eventsNew = 0
+	a.eventsView = views.NewEventsView(a.events).SetSize(a.width, a.height-6)
+	return a, nil
+}
+
+func (a App) handleSwitchToHosts(msg views.SwitchToHostsMsg) (tea.Model, tea.Cmd) {
+	a.prevState = a.state
+	a.state = viewHosts
+	a.hostsView = views.NewHostsView(a.cfg.Hosts, a.cfg.DockerHost).SetSize(a.width, a.height-7)
+	return a, nil
+}
+
+func (a App) handleHostDelete(msg views.HostDeleteMsg) (tea.Model, tea.Cmd) {
+	a.cfg.RemoveHost(msg.Name)
+	_ = a.cfg.Save()
+	a.hostsView = views.NewHostsView(a.cfg.Hosts, a.cfg.DockerHost).SetSize(a.width, a.height-7)
+	a.notification = "Host removed: " + msg.Name
+	a.notificationErr = false
+	a.notificationExp = time.Now().Add(2 * time.Second)
+	return a, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+}
+
+func (a App) handleHostAdd(msg views.HostAddMsg) (tea.Model, tea.Cmd) {
+	a.cfg.AddHost(msg.Name, msg.URL)
+	_ = a.cfg.Save()
+	a.hostsView = views.NewHostsView(a.cfg.Hosts, a.cfg.DockerHost).SetSize(a.width, a.height-7)
+	a.notification = "Host added: " + msg.Name
+	a.notificationErr = false
+	a.notificationExp = time.Now().Add(2 * time.Second)
+	return a, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
 }
 
 func (a App) handleSystemAndMiscMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -481,110 +511,39 @@ func (a App) handleSystemAndMiscMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (a App) handleFileAndNavMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case views.OpenBrowserMsg:
-		err := util.OpenBrowser(msg.URL)
-		if err != nil {
-			a.notification = "open: " + err.Error()
-			a.notificationErr = true
-		} else {
-			a.notification = "Opening " + msg.URL
-			a.notificationErr = false
-		}
-		a.notificationExp = time.Now().Add(3 * time.Second)
-		return a, tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
-
-	// --- Logs save ---
-
+		return a.handleOpenBrowser(msg)
 	case views.SaveLogsMsg:
-		path := msg.Path
-		if path == "" {
-			home, _ := os.UserHomeDir()
-			dir := filepath.Join(home, "wharf-logs")
-			_ = os.MkdirAll(dir, 0755)
-			path = filepath.Join(dir, a.logsView.ContainerName()+"-"+time.Now().Format("2006-01-02-150405")+".log")
-		}
-		lines := a.logsView.Lines()
-		err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644)
-		if err != nil {
-			a.notification = "save: " + err.Error()
-			a.notificationErr = true
-		} else {
-			a.notification = fmt.Sprintf("Saved %d lines → %s", len(lines), path)
-			a.notificationErr = false
-		}
-		a.notificationExp = time.Now().Add(3 * time.Second)
-		return a, tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
-
-	// --- Env file ---
-
+		return a.handleSaveLogs(msg)
 	case views.SwitchToEnvMsg:
-		a.prevState = a.state
-		a.state = viewEnv
-		a.envFileView = views.NewEnvFileView(msg.ProjectName, msg.ProjectPath).SetSize(a.width, a.height-5)
-		if a.envFileView.FileName() == "" {
-			a.state = a.prevState
-			a.notification = "No .env file found"
-			a.notificationErr = false
-			a.notificationExp = time.Now().Add(2 * time.Second)
-			return a, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
-		}
-		return a, nil
-
+		return a.handleSwitchToEnv(msg)
 	case views.SwitchBackFromEnvMsg:
 		a.state = a.prevState
 		return a, nil
-
 	case views.SwitchToTopProjectMsg:
-		a.prevState = a.state
-		a.state = viewTop
-		a.topView = views.NewTopViewProject(msg.Project).SetSize(a.width, a.height-7)
-		return a, views.LoadTopStats(a.docker, msg.Project)
-
+		return a.handleSwitchToTopProject(msg)
 	case views.SwitchToTopContainerMsg:
-		a.prevState = a.state
-		a.state = viewTop
-		a.topView = views.NewTopViewContainer(msg.ContainerID, msg.ContainerName, msg.Image).SetSize(a.width, a.height-7)
-		return a, views.LoadTopContainerStats(a.docker, msg.ContainerID)
-
+		return a.handleSwitchToTopContainer(msg)
 	case views.SwitchBackFromTopMsg:
 		a.state = a.prevState
 		return a, nil
-
 	case views.TopStatsLoadedMsg:
 		a.topView = a.topView.UpdateStats(msg.Stats)
 		return a, nil
-
 	case views.SwitchToFileBrowserMsg:
-		a.prevState = a.state
-		a.state = viewFileBrowser
-		a.fileBrowserView = views.NewFileBrowserView(msg.ContainerID, msg.ContainerName).SetSize(a.width, a.height-7)
-		return a, views.LoadDirectoryListing(a.docker, msg.ContainerID, "/")
-
+		return a.handleSwitchToFileBrowser(msg)
 	case views.SwitchBackFromFileBrowserMsg:
 		a.state = a.prevState
 		return a, nil
-
 	case views.FileBrowserListMsg:
 		a.fileBrowserView, _ = a.fileBrowserView.Update(msg, a.keys)
 		return a, nil
-
 	case views.FileBrowserReadMsg:
 		a.fileBrowserView, _ = a.fileBrowserView.Update(msg, a.keys)
 		return a, nil
-
 	case views.FileBrowserNavigateMsg:
-		if msg.IsFile {
-			return a, views.LoadFileContent(a.docker, msg.ContainerID, msg.Path)
-		}
-		return a, views.LoadDirectoryListing(a.docker, msg.ContainerID, msg.Path)
-
+		return a.handleFileBrowserNavigate(msg)
 	case views.SwitchToHelpMsg:
-		if a.state != viewHelp {
-			a.prevState = a.state
-		}
-		a.state = viewHelp
-		a.helpView = views.NewHelpView().SetSize(a.width, a.height-5)
-		return a, nil
-
+		return a.handleSwitchToHelp(msg)
 	case views.SwitchBackFromHelpMsg:
 		a.state = a.prevState
 		return a, nil
@@ -592,59 +551,108 @@ func (a App) handleFileAndNavMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return nil, nil
 }
 
+func (a App) handleOpenBrowser(msg views.OpenBrowserMsg) (tea.Model, tea.Cmd) {
+	err := util.OpenBrowser(msg.URL)
+	if err != nil {
+		a.notification = "open: " + err.Error()
+		a.notificationErr = true
+	} else {
+		a.notification = "Opening " + msg.URL
+		a.notificationErr = false
+	}
+	a.notificationExp = time.Now().Add(3 * time.Second)
+	return a, tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+}
+
+func (a App) handleSaveLogs(msg views.SaveLogsMsg) (tea.Model, tea.Cmd) {
+	path := msg.Path
+	if path == "" {
+		home, _ := os.UserHomeDir()
+		dir := filepath.Join(home, "wharf-logs")
+		_ = os.MkdirAll(dir, 0755)
+		path = filepath.Join(dir, a.logsView.ContainerName()+"-"+time.Now().Format("2006-01-02-150405")+".log")
+	}
+	lines := a.logsView.Lines()
+	err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644)
+	if err != nil {
+		a.notification = "save: " + err.Error()
+		a.notificationErr = true
+	} else {
+		a.notification = fmt.Sprintf("Saved %d lines → %s", len(lines), path)
+		a.notificationErr = false
+	}
+	a.notificationExp = time.Now().Add(3 * time.Second)
+	return a, tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+}
+
+func (a App) handleSwitchToEnv(msg views.SwitchToEnvMsg) (tea.Model, tea.Cmd) {
+	a.prevState = a.state
+	a.state = viewEnv
+	a.envFileView = views.NewEnvFileView(msg.ProjectName, msg.ProjectPath).SetSize(a.width, a.height-5)
+	if a.envFileView.FileName() == "" {
+		a.state = a.prevState
+		a.notification = "No .env file found"
+		a.notificationErr = false
+		a.notificationExp = time.Now().Add(2 * time.Second)
+		return a, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+	}
+	return a, nil
+}
+
+func (a App) handleSwitchToTopProject(msg views.SwitchToTopProjectMsg) (tea.Model, tea.Cmd) {
+	a.prevState = a.state
+	a.state = viewTop
+	a.topView = views.NewTopViewProject(msg.Project).SetSize(a.width, a.height-7)
+	return a, views.LoadTopStats(a.docker, msg.Project)
+}
+
+func (a App) handleSwitchToTopContainer(msg views.SwitchToTopContainerMsg) (tea.Model, tea.Cmd) {
+	a.prevState = a.state
+	a.state = viewTop
+	a.topView = views.NewTopViewContainer(msg.ContainerID, msg.ContainerName, msg.Image).SetSize(a.width, a.height-7)
+	return a, views.LoadTopContainerStats(a.docker, msg.ContainerID)
+}
+
+func (a App) handleSwitchToFileBrowser(msg views.SwitchToFileBrowserMsg) (tea.Model, tea.Cmd) {
+	a.prevState = a.state
+	a.state = viewFileBrowser
+	a.fileBrowserView = views.NewFileBrowserView(msg.ContainerID, msg.ContainerName).SetSize(a.width, a.height-7)
+	return a, views.LoadDirectoryListing(a.docker, msg.ContainerID, "/")
+}
+
+func (a App) handleFileBrowserNavigate(msg views.FileBrowserNavigateMsg) (tea.Model, tea.Cmd) {
+	if msg.IsFile {
+		return a, views.LoadFileContent(a.docker, msg.ContainerID, msg.Path)
+	}
+	return a, views.LoadDirectoryListing(a.docker, msg.ContainerID, msg.Path)
+}
+
+func (a App) handleSwitchToHelp(msg views.SwitchToHelpMsg) (tea.Model, tea.Cmd) {
+	if a.state != viewHelp {
+		a.prevState = a.state
+	}
+	a.state = viewHelp
+	a.helpView = views.NewHelpView().SetSize(a.width, a.height-5)
+	return a, nil
+}
+
 func (a App) handleDataAndTick(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case views.ProjectsLoadedMsg:
-		if a.state == viewServices {
-			for _, p := range msg.Projects {
-				if p.Name == a.servicesView.ProjectName() {
-					a.servicesView = a.servicesView.UpdateProject(p)
-					break
-				}
-			}
-		}
-		var cmd tea.Cmd
-		a.projectsView, cmd = a.projectsView.Update(msg, a.keys)
-		return a, cmd
-
+		return a.handleProjectsLoaded(msg)
 	case views.ProjectsErrorMsg:
 		a.projectsView, _ = a.projectsView.Update(msg, a.keys)
 		return a, nil
-
 	case views.TickMsg:
-		cmds := []tea.Cmd{
-			views.LoadProjects(a.docker),
-			views.TickCmd(a.cfg.PollInterval),
-		}
-		if a.state == viewServices {
-			cmds = append(cmds, views.LoadStats(a.docker, a.servicesView.Project()))
-			cmds = append(cmds, views.LoadHealth(a.docker, a.servicesView.Project()))
-		}
-		if a.state == viewTop {
-			if a.topView.IsProjectMode() {
-				cmds = append(cmds, views.LoadTopStats(a.docker, a.topView.Project()))
-			} else {
-				cmds = append(cmds, views.LoadTopContainerStats(a.docker, a.topView.ContainerID()))
-			}
-		}
-		return a, tea.Batch(cmds...)
-
+		return a.handleTick(msg)
 	case views.StatsLoadedMsg:
 		a.servicesView = a.servicesView.UpdateStats(msg.Stats)
 		return a, nil
-
-	// --- Compose ---
-
 	case views.BatchActionMsg:
-		a.notification = fmt.Sprintf("compose %s: %d projects...", msg.Action, len(msg.Projects))
-		a.notificationErr = false
-		a.notificationExp = time.Now().Add(30 * time.Second)
-		return a, a.executeBatchCompose(msg.Action, msg.Projects)
-
+		return a.handleBatchAction(msg)
 	case views.HealthLoadedMsg:
 		a.servicesView = a.servicesView.UpdateHealth(msg.Health)
 		return a, nil
-
 	case views.ComposeUpMsg:
 		return a, a.executeCompose("up", msg.ProjectName, msg.ProjectPath)
 	case views.ComposeStopMsg:
@@ -654,20 +662,63 @@ func (a App) handleDataAndTick(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case views.ComposeRestartMsg:
 		return a, a.executeCompose("restart", msg.ProjectName, msg.ProjectPath)
 	case views.ComposeResultMsg:
-		if msg.Err != nil {
-			a.notification = "compose " + msg.Action + " " + msg.ProjectName + ": " + msg.Err.Error()
-			a.notificationErr = true
-		} else {
-			a.notification = "compose " + msg.Action + " " + msg.ProjectName + ": OK"
-			a.notificationErr = false
-		}
-		a.notificationExp = time.Now().Add(3 * time.Second)
-		return a, tea.Tick(3*time.Second, func(time.Time) tea.Msg {
-			return notificationClearMsg{}
-		})
-
+		return a.handleComposeResult(msg)
 	}
 	return nil, nil
+}
+
+func (a App) handleProjectsLoaded(msg views.ProjectsLoadedMsg) (tea.Model, tea.Cmd) {
+	if a.state == viewServices {
+		for _, p := range msg.Projects {
+			if p.Name == a.servicesView.ProjectName() {
+				a.servicesView = a.servicesView.UpdateProject(p)
+				break
+			}
+		}
+	}
+	var cmd tea.Cmd
+	a.projectsView, cmd = a.projectsView.Update(msg, a.keys)
+	return a, cmd
+}
+
+func (a App) handleTick(msg views.TickMsg) (tea.Model, tea.Cmd) {
+	cmds := []tea.Cmd{
+		views.LoadProjects(a.docker),
+		views.TickCmd(a.cfg.PollInterval),
+	}
+	if a.state == viewServices {
+		cmds = append(cmds, views.LoadStats(a.docker, a.servicesView.Project()))
+		cmds = append(cmds, views.LoadHealth(a.docker, a.servicesView.Project()))
+	}
+	if a.state == viewTop {
+		if a.topView.IsProjectMode() {
+			cmds = append(cmds, views.LoadTopStats(a.docker, a.topView.Project()))
+		} else {
+			cmds = append(cmds, views.LoadTopContainerStats(a.docker, a.topView.ContainerID()))
+		}
+	}
+	return a, tea.Batch(cmds...)
+}
+
+func (a App) handleBatchAction(msg views.BatchActionMsg) (tea.Model, tea.Cmd) {
+	a.notification = fmt.Sprintf("compose %s: %d projects...", msg.Action, len(msg.Projects))
+	a.notificationErr = false
+	a.notificationExp = time.Now().Add(30 * time.Second)
+	return a, a.executeBatchCompose(msg.Action, msg.Projects)
+}
+
+func (a App) handleComposeResult(msg views.ComposeResultMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		a.notification = "compose " + msg.Action + " " + msg.ProjectName + ": " + msg.Err.Error()
+		a.notificationErr = true
+	} else {
+		a.notification = "compose " + msg.Action + " " + msg.ProjectName + ": OK"
+		a.notificationErr = false
+	}
+	a.notificationExp = time.Now().Add(3 * time.Second)
+	return a, tea.Tick(3*time.Second, func(time.Time) tea.Msg {
+		return notificationClearMsg{}
+	})
 }
 
 func (a App) handleActions(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -678,135 +729,149 @@ func (a App) handleActions(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.executeAction("stop", msg.Service)
 	case views.ActionRestartMsg:
 		return a, a.executeAction("restart", msg.Service)
-
 	case views.ActionResultMsg:
-		if msg.Err != nil {
-			a.notification = msg.Action + " " + msg.ServiceName + ": " + msg.Err.Error()
-			a.notificationErr = true
-		} else {
-			a.notification = msg.Action + " " + msg.ServiceName + ": OK"
-			a.notificationErr = false
-		}
-		a.notificationExp = time.Now().Add(3 * time.Second)
-		return a, tea.Tick(3*time.Second, func(time.Time) tea.Msg {
-			return notificationClearMsg{}
-		})
-
+		return a.handleActionResult(msg)
 	case updateAvailableMsg:
 		a.updateAvailable = msg.Version
 		return a, nil
-
 	case composeValidateResultMsg:
-		if msg.Err != nil {
-			errText := strings.TrimSpace(msg.Output)
-			if errText == "" {
-				errText = msg.Err.Error()
-			}
-			a.notification = "✕ " + errText
-			a.notificationErr = true
-		} else {
-			a.notification = "✓ Compose file is valid"
-			a.notificationErr = false
-		}
-		a.notificationExp = time.Now().Add(5 * time.Second)
-		return a, tea.Tick(5*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
-
+		return a.handleComposeValidateResult(msg)
 	case switchHostMsg:
-		var newClient *docker.Client
-		var connErr error
-		if msg.host != "" {
-			newClient, connErr = docker.NewClientWithHost(msg.host)
-		} else {
-			newClient, connErr = docker.NewClient()
-		}
-		if connErr != nil {
-			a.notification = "Connection failed: " + connErr.Error()
-			a.notificationErr = true
-			a.notificationExp = time.Now().Add(5 * time.Second)
-			return a, tea.Tick(5*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
-		}
-		if a.docker != nil {
-			a.docker.Close()
-		}
-		a.docker = newClient
-		a.cfg.DockerHost = msg.host
-		if ch, evErr := newClient.SubscribeEvents(context.Background()); evErr == nil {
-			a.eventsChan = ch
-		}
-		hostName := "local"
-		if msg.host != "" {
-			hostName = msg.host
-		}
-		a.notification = "Connected: " + hostName
-		a.notificationErr = false
-		a.notificationExp = time.Now().Add(3 * time.Second)
-		a.state = viewProjects
-		return a, tea.Batch(
-			views.LoadProjects(a.docker),
-			tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} }),
-		)
-
+		return a.handleSwitchHost(msg)
 	case notificationClearMsg:
 		if time.Now().After(a.notificationExp) {
 			a.notification = ""
 		}
 		return a, nil
-
-	// --- Custom commands ---
-
 	case views.CustomCommandMsg:
-		c := exec.Command("sh", "-c", msg.Command)
-		return a, tea.ExecProcess(c, func(err error) tea.Msg {
-			return views.CustomCommandDoneMsg{Err: err, Name: msg.Name}
-		})
-
+		return a.handleCustomCommand(msg)
 	case views.CustomCommandDoneMsg:
-		if msg.Err != nil {
-			a.notification = msg.Name + ": " + msg.Err.Error()
-			a.notificationErr = true
-		} else {
-			a.notification = msg.Name + ": done"
-			a.notificationErr = false
-		}
-		a.notificationExp = time.Now().Add(2 * time.Second)
-		return a, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
-
-	// --- Exec ---
-
+		return a.handleCustomCommandDone(msg)
 	case views.ExecMsg:
-		shell := msg.Shell
-		if shell == "" {
-			shell = a.docker.DetectShell(context.Background(), msg.ContainerID)
-		}
-		banner := fmt.Sprintf(
-			"echo '─────────────────────────────────────────' && "+
-				"echo '  ⚓ Wharf — Container Shell' && "+
-				"echo '  Container: %s' && "+
-				"echo '  Image:     %s' && "+
-				"echo '  Shell:     %s' && "+
-				"echo '  Exit:      type exit or Ctrl+D' && "+
-				"echo '─────────────────────────────────────────' && "+
-				"exec %s",
-			msg.ContainerName, msg.Image, shell, shell,
-		)
-		c := exec.Command("docker", "exec", "-it", msg.ContainerID, "sh", "-c", banner)
-		return a, tea.ExecProcess(c, func(err error) tea.Msg {
-			return views.ExecDoneMsg{Err: err}
-		})
-
+		return a.handleExecAction(msg)
 	case views.ExecDoneMsg:
-		if msg.Err != nil {
-			a.notification = "exec: " + msg.Err.Error()
-			a.notificationErr = true
-			a.notificationExp = time.Now().Add(3 * time.Second)
-			return a, tea.Tick(3*time.Second, func(time.Time) tea.Msg {
-				return notificationClearMsg{}
-			})
-		}
-		return a, nil
-
+		return a.handleExecDone(msg)
 	}
 	return nil, nil
+}
+
+func (a App) handleActionResult(msg views.ActionResultMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		a.notification = msg.Action + " " + msg.ServiceName + ": " + msg.Err.Error()
+		a.notificationErr = true
+	} else {
+		a.notification = msg.Action + " " + msg.ServiceName + ": OK"
+		a.notificationErr = false
+	}
+	a.notificationExp = time.Now().Add(3 * time.Second)
+	return a, tea.Tick(3*time.Second, func(time.Time) tea.Msg {
+		return notificationClearMsg{}
+	})
+}
+
+func (a App) handleComposeValidateResult(msg composeValidateResultMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		errText := strings.TrimSpace(msg.Output)
+		if errText == "" {
+			errText = msg.Err.Error()
+		}
+		a.notification = "✕ " + errText
+		a.notificationErr = true
+	} else {
+		a.notification = "✓ Compose file is valid"
+		a.notificationErr = false
+	}
+	a.notificationExp = time.Now().Add(5 * time.Second)
+	return a, tea.Tick(5*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+}
+
+func (a App) handleSwitchHost(msg switchHostMsg) (tea.Model, tea.Cmd) {
+	var newClient *docker.Client
+	var connErr error
+	if msg.host != "" {
+		newClient, connErr = docker.NewClientWithHost(msg.host)
+	} else {
+		newClient, connErr = docker.NewClient()
+	}
+	if connErr != nil {
+		a.notification = "Connection failed: " + connErr.Error()
+		a.notificationErr = true
+		a.notificationExp = time.Now().Add(5 * time.Second)
+		return a, tea.Tick(5*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+	}
+	if a.docker != nil {
+		a.docker.Close()
+	}
+	a.docker = newClient
+	a.cfg.DockerHost = msg.host
+	if ch, evErr := newClient.SubscribeEvents(context.Background()); evErr == nil {
+		a.eventsChan = ch
+	}
+	hostName := "local"
+	if msg.host != "" {
+		hostName = msg.host
+	}
+	a.notification = "Connected: " + hostName
+	a.notificationErr = false
+	a.notificationExp = time.Now().Add(3 * time.Second)
+	a.state = viewProjects
+	return a, tea.Batch(
+		views.LoadProjects(a.docker),
+		tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} }),
+	)
+}
+
+func (a App) handleCustomCommand(msg views.CustomCommandMsg) (tea.Model, tea.Cmd) {
+	c := exec.Command("sh", "-c", msg.Command)
+	return a, tea.ExecProcess(c, func(err error) tea.Msg {
+		return views.CustomCommandDoneMsg{Err: err, Name: msg.Name}
+	})
+}
+
+func (a App) handleCustomCommandDone(msg views.CustomCommandDoneMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		a.notification = msg.Name + ": " + msg.Err.Error()
+		a.notificationErr = true
+	} else {
+		a.notification = msg.Name + ": done"
+		a.notificationErr = false
+	}
+	a.notificationExp = time.Now().Add(2 * time.Second)
+	return a, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+}
+
+func (a App) handleExecAction(msg views.ExecMsg) (tea.Model, tea.Cmd) {
+	shell := msg.Shell
+	if shell == "" {
+		shell = a.docker.DetectShell(context.Background(), msg.ContainerID)
+	}
+	banner := fmt.Sprintf(
+		"echo '─────────────────────────────────────────' && "+
+			"echo '  ⚓ Wharf — Container Shell' && "+
+			"echo '  Container: %s' && "+
+			"echo '  Image:     %s' && "+
+			"echo '  Shell:     %s' && "+
+			"echo '  Exit:      type exit or Ctrl+D' && "+
+			"echo '─────────────────────────────────────────' && "+
+			"exec %s",
+		msg.ContainerName, msg.Image, shell, shell,
+	)
+	c := exec.Command("docker", "exec", "-it", msg.ContainerID, "sh", "-c", banner)
+	return a, tea.ExecProcess(c, func(err error) tea.Msg {
+		return views.ExecDoneMsg{Err: err}
+	})
+}
+
+func (a App) handleExecDone(msg views.ExecDoneMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		a.notification = "exec: " + msg.Err.Error()
+		a.notificationErr = true
+		a.notificationExp = time.Now().Add(3 * time.Second)
+		return a, tea.Tick(3*time.Second, func(time.Time) tea.Msg {
+			return notificationClearMsg{}
+		})
+	}
+	return a, nil
 }
 
 func (a App) isFilterMode() bool {

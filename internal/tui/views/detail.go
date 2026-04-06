@@ -92,6 +92,18 @@ func (v DetailView) handleKeyMsg(msg tea.KeyMsg, keys ui.KeyMap) (DetailView, te
 		}
 	}
 
+	switch {
+	case ui.MatchKey(msg, keys.Down), ui.MatchKey(msg, keys.Up),
+		ui.MatchKey(msg, keys.Bottom), msg.String() == "g":
+		return v.handleDetailScroll(msg, keys), nil
+	case ui.MatchKey(msg, keys.Left):
+		return v, func() tea.Msg { return SwitchBackFromDetailMsg{} }
+	default:
+		return v.handleDetailActions(msg, keys)
+	}
+}
+
+func (v DetailView) handleDetailScroll(msg tea.KeyMsg, keys ui.KeyMap) DetailView {
 	totalLines := len(v.sections)
 	visible := v.visibleHeight()
 
@@ -110,8 +122,12 @@ func (v DetailView) handleKeyMsg(msg tea.KeyMsg, keys ui.KeyMap) (DetailView, te
 		}
 	case msg.String() == "g":
 		v.pendingG = true
-	case ui.MatchKey(msg, keys.Left):
-		return v, func() tea.Msg { return SwitchBackFromDetailMsg{} }
+	}
+	return v
+}
+
+func (v DetailView) handleDetailActions(msg tea.KeyMsg, keys ui.KeyMap) (DetailView, tea.Cmd) {
+	switch {
 	case ui.MatchKey(msg, keys.Logs):
 		if len(v.service.Containers) > 0 {
 			ct := v.service.Containers[0]
