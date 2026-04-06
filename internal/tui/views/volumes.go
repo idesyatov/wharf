@@ -211,20 +211,3 @@ func PruneVolumes(client *docker.Client) tea.Cmd {
 	}
 }
 
-func FormatBytes(bytes uint64) string {
-	const (
-		ki = 1024
-		mi = ki * 1024
-		gi = mi * 1024
-	)
-	switch {
-	case bytes >= gi:
-		return fmt.Sprintf("%.1fGi", float64(bytes)/float64(gi))
-	case bytes >= mi:
-		return fmt.Sprintf("%dMi", bytes/mi)
-	case bytes >= ki:
-		return fmt.Sprintf("%dKi", bytes/ki)
-	default:
-		return fmt.Sprintf("%dB", bytes)
-	}
-}

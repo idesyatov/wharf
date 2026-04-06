@@ -667,31 +667,6 @@ func svcHealthPlain(health map[string]string, svc docker.Service) string {
 	return "-"
 }
 
-func formatCPU(percent float64) string {
-	if percent < 10 {
-		return fmt.Sprintf("%.1f%%", percent)
-	}
-	return fmt.Sprintf("%.0f%%", percent)
-}
-
-func formatMemory(bytes uint64) string {
-	const (
-		ki = 1024
-		mi = ki * 1024
-		gi = mi * 1024
-	)
-	switch {
-	case bytes >= gi:
-		return fmt.Sprintf("%.1fGi", float64(bytes)/float64(gi))
-	case bytes >= mi:
-		return fmt.Sprintf("%dMi", bytes/mi)
-	case bytes >= ki:
-		return fmt.Sprintf("%dKi", bytes/ki)
-	default:
-		return fmt.Sprintf("%dB", bytes)
-	}
-}
-
 func formatPorts(svc docker.Service) string {
 	seen := make(map[string]bool)
 	var parts []string

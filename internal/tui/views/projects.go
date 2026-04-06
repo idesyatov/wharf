@@ -544,28 +544,6 @@ func statusTextPlain(s docker.ServiceStatus) string {
 	}
 }
 
-func renderSelectedRow(text string, width int) string {
-	for lipgloss.Width(text) < width {
-		text += " "
-	}
-	return ui.SelectedRowStyle.Render(text)
-}
-
-func truncate(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	return s[:max-1] + "…"
-}
-
-func padRight(s string, width int) string {
-	visible := lipgloss.Width(s)
-	if visible >= width {
-		return s
-	}
-	return s + strings.Repeat(" ", width-visible)
-}
-
 func (v ProjectsView) batchAction(action string, filtered []docker.Project) tea.Cmd {
 	var projects []docker.Project
 	for idx := range v.selected {
