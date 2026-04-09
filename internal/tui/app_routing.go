@@ -345,6 +345,26 @@ func (a App) handleToolMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 			tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} }),
 		)
 
+	case views.LoadImageLayersMsg:
+		return a, views.LoadImageLayers(a.docker, msg.ImageID)
+
+	case views.ImageSaveMsg:
+		a.notification = "Saving image: " + msg.Ref + "..."
+		a.notificationErr = false
+		a.notificationExp = time.Now().Add(60 * time.Second)
+		return a, views.SaveImage(a.docker, msg.Ref)
+
+	case views.ImageSaveDoneMsg:
+		if msg.Err != nil {
+			a.notification = "Save failed: " + msg.Err.Error()
+			a.notificationErr = true
+		} else {
+			a.notification = "Saved: " + msg.Path
+			a.notificationErr = false
+		}
+		a.notificationExp = time.Now().Add(5 * time.Second)
+		return a, tea.Tick(5*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
+
 	case views.PruneImagesActionMsg:
 		return a, views.PruneImages(a.docker)
 

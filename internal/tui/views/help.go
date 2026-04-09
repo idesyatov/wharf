@@ -223,7 +223,9 @@ var helpText = strings.TrimSpace(`
     P                 Prune dangling volumes
 
   Images view
+    Enter/l           View image layers
     p                 Pull image
+    w                 Export image to tar (docker save)
     P                 Prune unused images
 
   System view

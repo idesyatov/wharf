@@ -239,8 +239,14 @@ func (a App) menuVolumes() string {
 }
 
 func (a App) menuImages() string {
+	if a.imagesView.LayersMode() {
+		return joinMenuItems(
+			ui.FormatMenuItem("w", " export"),
+		)
+	}
 	return joinMenuItems(
 		ui.FormatMenuItem("p", "ull"),
+		ui.FormatMenuItem("w", " export"),
 		ui.FormatMenuItem("P", "rune"),
 	)
 }

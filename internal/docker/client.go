@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -557,6 +558,48 @@ func (c *Client) ExecOutput(ctx context.Context, containerID string, cmd []strin
 
 func (c *Client) DetectShell(_ context.Context, _ string) string {
 	return "sh"
+}
+
+// ImageLayer represents a single layer in a Docker image history.
+type ImageLayer struct {
+	CreatedBy string
+	Size      int64
+	Created   time.Time
+}
+
+func (c *Client) ImageHistory(ctx context.Context, imageID string) ([]ImageLayer, error) {
+	history, err := c.cli.ImageHistory(ctx, imageID)
+	if err != nil {
+		return nil, fmt.Errorf("image history %s: %w", imageID, err)
+	}
+	var layers []ImageLayer
+	for _, h := range history {
+		layers = append(layers, ImageLayer{
+			CreatedBy: h.CreatedBy,
+			Size:      h.Size,
+			Created:   time.Unix(h.Created, 0),
+		})
+	}
+	return layers, nil
+}
+
+func (c *Client) ImageSave(ctx context.Context, imageRef string, outputPath string) error {
+	reader, err := c.cli.ImageSave(ctx, []string{imageRef})
+	if err != nil {
+		return fmt.Errorf("image save %s: %w", imageRef, err)
+	}
+	defer reader.Close()
+
+	f, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("create file %s: %w", outputPath, err)
+	}
+	defer f.Close()
+
+	if _, err := io.Copy(f, reader); err != nil {
+		return fmt.Errorf("write file %s: %w", outputPath, err)
+	}
+	return nil
 }
 
 func fromAPIContainer(r types.Container) Container {

@@ -115,6 +115,7 @@ wharf --config   # show config path and current settings
 | `*` | Toggle bookmark | Projects |
 | `y` / `Y` | Copy ID / full info | Services, Detail |
 | `f` | Toggle log follow/pause | Logs |
+| `w` | Export image to tar | Images |
 | `P` | Prune | Volumes, Images, System |
 | `Space` | Toggle select (bulk) | Projects |
 
