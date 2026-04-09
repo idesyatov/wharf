@@ -113,6 +113,13 @@ func (c *Client) RestartContainer(ctx context.Context, id string) error {
 	return nil
 }
 
+func (c *Client) RemoveContainer(ctx context.Context, id string) error {
+	if err := c.cli.ContainerRemove(ctx, id, container.RemoveOptions{}); err != nil {
+		return fmt.Errorf("remove container %s: %w", id, err)
+	}
+	return nil
+}
+
 func (c *Client) StartService(ctx context.Context, svc Service) error {
 	var firstErr error
 	for _, ct := range svc.Containers {

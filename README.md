@@ -16,6 +16,7 @@ A terminal UI for managing Docker Compose stacks. Inspired by [k9s](https://gith
 
 - Browse and manage Docker Compose projects and services
 - Compose up / stop / down / restart / build / validate
+- Docker Compose profiles support (`:up <profile>` / `:up *`)
 - Exec into containers with shell banner
 - Real-time CPU/MEM/Network monitoring with braille charts (Top View)
 - Stream container logs with follow/pause and search
@@ -26,7 +27,7 @@ A terminal UI for managing Docker Compose stacks. Inspired by [k9s](https://gith
 - Docker System overview with disk usage
 - Live Docker events monitoring
 - Custom commands from config with template variables
-- Command mode with Tab-autocomplete (:exec, :go, :validate, :theme, :host...)
+- Command mode with Tab-autocomplete (:exec, :go, :validate, :theme, :host, :up...)
 - Remote Docker host via SSH (`:host ssh://user@server`)
 - Host Switcher (`H`) — saved hosts with add/delete, connect by name
 - Bookmark favorite projects (★), bulk operations (Space)
@@ -96,6 +97,7 @@ wharf --config   # show config path and current settings
 | `L` | View logs | Services, Detail |
 | `t` | Resource monitor (top) | Projects, Services |
 | `F` | Browse container files | Services, Detail |
+| `x` | Remove stopped container | Services |
 | `H` | Host Switcher | Projects |
 | | | |
 | `u` | Compose up | Projects |
@@ -124,6 +126,8 @@ wharf --config   # show config path and current settings
 | Command | Action |
 |---------|--------|
 | `:q` / `:q!` | Quit |
+| `:up [profile]` | Compose up with profile (`:up debug`, `:up *` for all) |
+| `:down [profile]` | Compose down with profile (`:down debug`, `:down *`) |
 | `:host [name/url]` | Show / switch Docker host by name or URL (ssh://, tcp://) |
 | `:hosts` | Open Host Switcher view |
 | `:go <n>` | Jump to project by name |
@@ -179,6 +183,17 @@ keybindings:
 ```
 
 Custom themes: `~/.config/wharf/themes/<n>.yaml`
+
+## Examples
+
+See [examples/](examples/) for sample compose projects:
+
+| Example | Description |
+|---------|-------------|
+| `simple-web` | Single nginx container |
+| `multi-service` | App + worker + Redis + API |
+| `with-volumes` | Services with persistent volumes |
+| `with-profiles` | Compose profiles (debug, monitoring, test) |
 
 ## Tech Stack
 

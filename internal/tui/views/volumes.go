@@ -218,4 +218,3 @@ func PruneVolumes(client *docker.Client) tea.Cmd {
 		return VolumesPrunedMsg{Err: err, Count: count, Reclaimed: reclaimed}
 	}
 }
-

@@ -162,9 +162,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return a.delegateToView(msg)
 }
 
-
-
-
 func (a *App) cleanup() {
 	a.logsView.Close()
 	if a.docker != nil {

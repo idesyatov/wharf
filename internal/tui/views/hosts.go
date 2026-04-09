@@ -64,7 +64,7 @@ func (v HostsView) SetSize(w, h int) HostsView {
 }
 
 func (v HostsView) AddMode() bool       { return v.addMode }
-func (v HostsView) PendingDelete() bool  { return v.pendingDelete }
+func (v HostsView) PendingDelete() bool { return v.pendingDelete }
 func (v HostsView) PendingDeleteName() string {
 	if v.cursor > 0 && v.cursor < len(v.hosts) {
 		return v.hosts[v.cursor].name

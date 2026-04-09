@@ -59,6 +59,15 @@ type CustomCommandDoneMsg struct {
 	Name string
 }
 
+type ContainerRemoveMsg struct {
+	ContainerID   string
+	ContainerName string
+}
+
+type ContainerRemoveRunningMsg struct {
+	Name string
+}
+
 type ServicesView struct {
 	project         docker.Project
 	cursor          int
@@ -75,6 +84,8 @@ type ServicesView struct {
 	pendingDownName string
 	pendingDownPath string
 	customCommands  []config.CustomCommand
+	profiles        *docker.ComposeProfiles
+	pendingRemove   bool
 }
 
 func NewServicesView(project docker.Project, customCommands []config.CustomCommand) ServicesView {
@@ -85,6 +96,12 @@ func NewServicesView(project docker.Project, customCommands []config.CustomComma
 }
 
 func (v ServicesView) CustomCommands() []config.CustomCommand { return v.customCommands }
+func (v ServicesView) Profiles() *docker.ComposeProfiles      { return v.profiles }
+
+func (v ServicesView) SetProfiles(p *docker.ComposeProfiles) ServicesView {
+	v.profiles = p
+	return v
+}
 
 func (v ServicesView) SetSize(w, h int) ServicesView {
 	v.width = w
@@ -100,7 +117,18 @@ func (v ServicesView) FilterMode() bool        { return v.filterMode }
 func (v ServicesView) FilterText() string      { return v.filterText }
 func (v ServicesView) PendingDown() bool       { return v.pendingDown }
 func (v ServicesView) PendingDownName() string { return v.pendingDownName }
-func (v ServicesView) HasStats() bool            { return len(v.stats) > 0 }
+func (v ServicesView) PendingRemove() bool     { return v.pendingRemove }
+func (v ServicesView) PendingRemoveName() string {
+	filtered := v.filtered()
+	if v.cursor >= 0 && v.cursor < len(filtered) {
+		svc := filtered[v.cursor]
+		if len(svc.Containers) > 0 {
+			return svc.Containers[0].Name
+		}
+	}
+	return ""
+}
+func (v ServicesView) HasStats() bool { return len(v.stats) > 0 }
 
 func (v ServicesView) UpdateStats(stats map[string]docker.Stats) ServicesView {
 	v.stats = stats
@@ -333,6 +361,23 @@ func (v ServicesView) handleKeyMsg(msg tea.KeyMsg, keys ui.KeyMap) (ServicesView
 		return v, nil
 	}
 
+	if v.pendingRemove {
+		v.pendingRemove = false
+		if msg.String() == "y" || msg.String() == "Y" {
+			filtered := v.filtered()
+			if v.cursor >= 0 && v.cursor < len(filtered) {
+				svc := filtered[v.cursor]
+				if len(svc.Containers) > 0 {
+					ct := svc.Containers[0]
+					return v, func() tea.Msg {
+						return ContainerRemoveMsg{ContainerID: ct.ID, ContainerName: ct.Name}
+					}
+				}
+			}
+		}
+		return v, nil
+	}
+
 	if v.pendingG {
 		v.pendingG = false
 		if msg.String() == "g" {
@@ -417,6 +462,19 @@ func (v ServicesView) handleServiceActions(msg tea.KeyMsg, keys ui.KeyMap, filte
 	case ui.MatchKey(msg, keys.Logs):
 		if svc, ok := v.selectedService(); ok && len(svc.Containers) > 0 {
 			return v, func() tea.Msg { return SwitchToLogsMsg{Container: svc.Containers[0]} }
+		}
+	case msg.String() == "x":
+		if v.cursor >= 0 && v.cursor < len(filtered) {
+			svc := filtered[v.cursor]
+			if len(svc.Containers) > 0 {
+				if svc.Containers[0].Status == "running" {
+					name := svc.Containers[0].Name
+					return v, func() tea.Msg {
+						return ContainerRemoveRunningMsg{Name: name}
+					}
+				}
+				v.pendingRemove = true
+			}
 		}
 	default:
 		return v.handleServiceTools(msg, keys, filtered)
@@ -593,9 +651,16 @@ func (v ServicesView) View() string {
 		cpu, mem := v.svcStats(svc)
 		ctName := svcContainerName(svc)
 
+		svcDisplay := svc.Name
+		if v.profiles != nil {
+			if profs, ok := v.profiles.ServiceProfiles[svc.Name]; ok {
+				svcDisplay = svc.Name + " [" + strings.Join(profs, ",") + "]"
+			}
+		}
+
 		if i == v.cursor {
 			plainRow := fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s %-*s %-*s %s",
-				colName, truncate(svc.Name, colName),
+				colName, truncate(svcDisplay, colName),
 				colCont, truncate(ctName, colCont),
 				colStatus, statusTextPlain(svc.Status),
 				colHealth, svcHealthPlain(v.health, svc),
@@ -611,7 +676,7 @@ func (v ServicesView) View() string {
 		statusStr := statusText(svc.Status)
 		healthStr := v.svcHealthIndicator(svc)
 		row := fmt.Sprintf("%-*s %-*s %s %s %-*s %-*s %-*s %s",
-			colName, truncate(svc.Name, colName),
+			colName, truncate(svcDisplay, colName),
 			colCont, truncate(ctName, colCont),
 			padRight(statusStr, colStatus),
 			padRight(healthStr, colHealth),

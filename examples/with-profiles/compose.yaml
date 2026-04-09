@@ -1,0 +1,30 @@
+services:
+  web:
+    image: nginx:alpine
+    ports:
+      - "8090:80"
+    restart: unless-stopped
+
+  app:
+    image: busybox
+    command: sh -c "while true; do echo app running; sleep 5; done"
+    restart: unless-stopped
+
+  debug:
+    image: busybox
+    command: sh -c "echo debug tools running; sleep infinity"
+    profiles:
+      - debug
+
+  monitoring:
+    image: busybox
+    command: sh -c "echo monitoring active; sleep infinity"
+    profiles:
+      - monitoring
+
+  test-runner:
+    image: busybox
+    command: sh -c "echo running tests; sleep 30"
+    profiles:
+      - test
+      - ci

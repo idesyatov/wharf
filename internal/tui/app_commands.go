@@ -122,6 +122,10 @@ func (a *App) executeCommand(cmd string) tea.Cmd {
 		return a.cmdExec(parts)
 	case "validate":
 		return a.cmdValidate(parts)
+	case "up":
+		return a.cmdUp(parts)
+	case "down":
+		return a.cmdDown(parts)
 	default:
 		return a.notifyErr("Unknown command: "+cmd, 2*time.Second)
 	}
@@ -216,6 +220,11 @@ func (a *App) cmdGo(parts []string) tea.Cmd {
 		if strings.Contains(strings.ToLower(p.Name), query) {
 			a.state = viewServices
 			a.servicesView = views.NewServicesView(p, a.cfg.CustomCommands).SetSize(a.width, a.height-7)
+			if p.Path != "" {
+				if profiles, err := docker.ParseProfiles(p.Path); err == nil {
+					a.servicesView = a.servicesView.SetProfiles(profiles)
+				}
+			}
 			a.notification = "→ " + p.Name
 			a.notificationErr = false
 			a.notificationExp = time.Now().Add(2 * time.Second)
@@ -269,6 +278,74 @@ func (a *App) cmdValidate(parts []string) tea.Cmd {
 		return a.notifyErr("validate: navigate to a project or use :validate <name>", 3*time.Second)
 	}
 	return a.validateCompose(projectPath)
+}
+
+func (a *App) cmdUp(parts []string) tea.Cmd {
+	if a.state != viewServices {
+		return a.notifyErr("up: only in Services view", 3*time.Second)
+	}
+	projectName := a.servicesView.ProjectName()
+	projectPath := a.servicesView.ProjectPath()
+	if projectPath == "" {
+		return a.notifyErr("up: project path unknown", 2*time.Second)
+	}
+
+	if len(parts) < 2 {
+		return a.executeCompose("up", projectName, projectPath)
+	}
+
+	profile := parts[1]
+	var profiles []string
+	if profile == "*" {
+		if p, err := docker.ParseProfiles(projectPath); err == nil {
+			profiles = p.AllProfiles
+		}
+	} else {
+		profiles = []string{profile}
+	}
+	pName := projectName
+	pPath := projectPath
+	return func() tea.Msg {
+		return views.ComposeResultMsg{
+			ProjectName: pName,
+			Action:      "up",
+			Err:         docker.ComposeUpWithProfiles(context.Background(), pPath, profiles),
+		}
+	}
+}
+
+func (a *App) cmdDown(parts []string) tea.Cmd {
+	if a.state != viewServices {
+		return a.notifyErr("down: only in Services view", 3*time.Second)
+	}
+	projectName := a.servicesView.ProjectName()
+	projectPath := a.servicesView.ProjectPath()
+	if projectPath == "" {
+		return a.notifyErr("down: project path unknown", 2*time.Second)
+	}
+
+	if len(parts) < 2 {
+		return a.executeCompose("down", projectName, projectPath)
+	}
+
+	profile := parts[1]
+	var profiles []string
+	if profile == "*" {
+		if p, err := docker.ParseProfiles(projectPath); err == nil {
+			profiles = p.AllProfiles
+		}
+	} else {
+		profiles = []string{profile}
+	}
+	pName := projectName
+	pPath := projectPath
+	return func() tea.Msg {
+		return views.ComposeResultMsg{
+			ProjectName: pName,
+			Action:      "down",
+			Err:         docker.ComposeDownWithProfiles(context.Background(), pPath, profiles),
+		}
+	}
 }
 
 func (a *App) findContainerByName(name string) *docker.Container {

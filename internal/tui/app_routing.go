@@ -60,6 +60,15 @@ func (a App) handleGlobalKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case msg.String() == ":":
 		a.cmdMode.SetHostNames(a.cfg.HostNames())
+		if a.state == viewServices {
+			if p := a.servicesView.Profiles(); p != nil {
+				a.cmdMode.SetProfileNames(p.AllProfiles)
+			} else {
+				a.cmdMode.SetProfileNames(nil)
+			}
+		} else {
+			a.cmdMode.SetProfileNames(nil)
+		}
 		a.cmdMode.Enter()
 		return a, nil
 	case ui.MatchKey(msg, a.keys.Quit):
@@ -125,6 +134,11 @@ func (a App) handleViewSwitch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case views.SwitchToServicesMsg:
 		a.state = viewServices
 		a.servicesView = views.NewServicesView(msg.Project, a.cfg.CustomCommands).SetSize(a.width, a.height-5)
+		if msg.Project.Path != "" {
+			if profiles, err := docker.ParseProfiles(msg.Project.Path); err == nil {
+				a.servicesView = a.servicesView.SetProfiles(profiles)
+			}
+		}
 		return a, nil
 
 	case views.SwitchToProjectsMsg:
@@ -747,6 +761,13 @@ func (a App) handleActions(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a.handleCustomCommand(msg)
 	case views.CustomCommandDoneMsg:
 		return a.handleCustomCommandDone(msg)
+	case views.ContainerRemoveMsg:
+		return a.handleContainerRemove(msg)
+	case views.ContainerRemoveRunningMsg:
+		a.notification = "Stop container first: " + msg.Name
+		a.notificationErr = true
+		a.notificationExp = time.Now().Add(3 * time.Second)
+		return a, tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
 	case views.ExecMsg:
 		return a.handleExecAction(msg)
 	case views.ExecDoneMsg:
@@ -870,6 +891,25 @@ func (a App) handleExecDone(msg views.ExecDoneMsg) (tea.Model, tea.Cmd) {
 		return a, tea.Tick(3*time.Second, func(time.Time) tea.Msg {
 			return notificationClearMsg{}
 		})
+	}
+	return a, nil
+}
+
+func (a App) handleContainerRemove(msg views.ContainerRemoveMsg) (tea.Model, tea.Cmd) {
+	if a.docker != nil {
+		err := a.docker.RemoveContainer(context.Background(), msg.ContainerID)
+		if err != nil {
+			a.notification = "Remove failed: " + err.Error()
+			a.notificationErr = true
+		} else {
+			a.notification = "Removed: " + msg.ContainerName
+			a.notificationErr = false
+		}
+		a.notificationExp = time.Now().Add(3 * time.Second)
+		return a, tea.Batch(
+			views.LoadProjects(a.docker),
+			tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} }),
+		)
 	}
 	return a, nil
 }

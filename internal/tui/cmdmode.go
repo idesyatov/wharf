@@ -19,14 +19,17 @@ var commandList = []string{
 	"go",
 	"exec",
 	"validate",
+	"up",
+	"down",
 }
 
 type CmdMode struct {
-	active    bool
-	input     string
-	history   []string
-	histIdx   int
-	hostNames []string
+	active       bool
+	input        string
+	history      []string
+	histIdx      int
+	hostNames    []string
+	profileNames []string
 }
 
 func (c *CmdMode) IsActive() bool { return c.active }
@@ -86,6 +89,10 @@ func (c *CmdMode) SetHostNames(names []string) {
 	c.hostNames = names
 }
 
+func (c *CmdMode) SetProfileNames(names []string) {
+	c.profileNames = names
+}
+
 func (c *CmdMode) complete() {
 	input := strings.TrimSpace(c.input)
 	if input == "" {
@@ -100,6 +107,15 @@ func (c *CmdMode) complete() {
 	}
 	// Also handle "host " with no arg typed yet — show nothing, just typed space
 	if len(parts) == 1 && strings.HasSuffix(c.input, " ") && parts[0] == "host" {
+		return
+	}
+
+	// Autocomplete argument for :up / :down
+	if len(parts) >= 2 && (parts[0] == "up" || parts[0] == "down") {
+		c.completeProfileArg(parts[0], parts[1])
+		return
+	}
+	if len(parts) == 1 && strings.HasSuffix(c.input, " ") && (parts[0] == "up" || parts[0] == "down") {
 		return
 	}
 
@@ -123,6 +139,25 @@ func (c *CmdMode) completeHostArg(arg string) {
 		common := commonPrefix(matches)
 		if len(common) > len(prefix) {
 			c.input = "host " + common
+		}
+	}
+}
+
+func (c *CmdMode) completeProfileArg(cmd, arg string) {
+	prefix := strings.ToLower(arg)
+	candidates := append([]string{"*"}, c.profileNames...)
+	var matches []string
+	for _, name := range candidates {
+		if strings.HasPrefix(strings.ToLower(name), prefix) {
+			matches = append(matches, name)
+		}
+	}
+	if len(matches) == 1 {
+		c.input = cmd + " " + matches[0]
+	} else if len(matches) > 1 {
+		common := commonPrefix(matches)
+		if len(common) > len(prefix) {
+			c.input = cmd + " " + common
 		}
 	}
 }

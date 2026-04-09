@@ -46,8 +46,8 @@ type KeyMap struct {
 	SaveLogs       key.Binding
 	EnvFile        key.Binding
 	Edit           key.Binding
-	TopView     key.Binding
-	FileBrowser key.Binding
+	TopView        key.Binding
+	FileBrowser    key.Binding
 }
 
 // DefaultKeyMap returns the default keybindings.

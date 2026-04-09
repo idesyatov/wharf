@@ -191,6 +191,7 @@ var helpText = strings.TrimSpace(`
     s                 Start service
     S                 Stop service
     r                 Restart service
+    x                 Remove stopped container (confirm)
     L                 View logs
     e                 Exec into container (shell)
     b                 Build service
@@ -204,12 +205,18 @@ var helpText = strings.TrimSpace(`
     n                 View networks
 
   Projects view
+    H                 Host Switcher (saved hosts)
     t                 Resource monitor (top) for project
     i                 View images
     D                 System disk usage
     E                 Docker events
     Space             Toggle select (bulk)
     Esc               Clear all selections
+
+  Host Switcher
+    Enter             Connect to selected host
+    a                 Add new host
+    d                 Delete host (confirm)
 
   Volumes view
     x                 Remove volume (confirm)
@@ -252,7 +259,10 @@ var helpText = strings.TrimSpace(`
     :q                Quit
     :theme dark       Switch to dark theme
     :theme light      Switch to light theme
-    :host             Show Docker host
+    :host [name/url]  Show / switch Docker host
+    :hosts            Open Host Switcher
+    :up [profile]     Compose up with profile (:up *, :up debug)
+    :down [profile]   Compose down with profile
     :version          Show version
     :save [path]      Save logs (in Logs view)
     :edit             Edit compose file (Compose view)

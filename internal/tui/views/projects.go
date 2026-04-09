@@ -80,13 +80,13 @@ func (v ProjectsView) SetSize(w, h int) ProjectsView {
 	return v
 }
 
-func (v ProjectsView) Breadcrumb() string      { return "" }
-func (v ProjectsView) FilterMode() bool        { return v.filterMode }
-func (v ProjectsView) FilterText() string      { return v.filterText }
-func (v ProjectsView) PendingDown() bool       { return v.pendingDown }
-func (v ProjectsView) PendingDownName() string { return v.pendingDownName }
-func (v ProjectsView) SelectedCount() int      { return len(v.selected) }
-func (v ProjectsView) HasSelected() bool       { return len(v.selected) > 0 }
+func (v ProjectsView) Breadcrumb() string         { return "" }
+func (v ProjectsView) FilterMode() bool           { return v.filterMode }
+func (v ProjectsView) FilterText() string         { return v.filterText }
+func (v ProjectsView) PendingDown() bool          { return v.pendingDown }
+func (v ProjectsView) PendingDownName() string    { return v.pendingDownName }
+func (v ProjectsView) SelectedCount() int         { return len(v.selected) }
+func (v ProjectsView) HasSelected() bool          { return len(v.selected) > 0 }
 func (v ProjectsView) Projects() []docker.Project { return v.projects }
 
 func LoadProjects(client *docker.Client) tea.Cmd {

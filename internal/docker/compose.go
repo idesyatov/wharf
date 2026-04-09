@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -195,6 +197,151 @@ func ComposeBuild(ctx context.Context, projectPath string, service string) error
 			return fmt.Errorf("compose build: %s", stderr.String())
 		}
 		return fmt.Errorf("compose build: %w", err)
+	}
+	return nil
+}
+
+// ComposeProfiles represents profiles extracted from a compose file.
+type ComposeProfiles struct {
+	AllProfiles     []string
+	ServiceProfiles map[string][]string
+}
+
+// ParseProfiles reads a compose file and extracts profile information.
+func ParseProfiles(projectPath string) (*ComposeProfiles, error) {
+	composePath, err := FindComposeFile(projectPath)
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(composePath)
+	if err != nil {
+		return nil, fmt.Errorf("read compose file: %w", err)
+	}
+
+	var raw struct {
+		Services map[string]struct {
+			Profiles []string `yaml:"profiles"`
+		} `yaml:"services"`
+	}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("parse compose file: %w", err)
+	}
+
+	profileSet := make(map[string]bool)
+	serviceProfiles := make(map[string][]string)
+	for name, svc := range raw.Services {
+		if len(svc.Profiles) > 0 {
+			serviceProfiles[name] = svc.Profiles
+			for _, p := range svc.Profiles {
+				profileSet[p] = true
+			}
+		}
+	}
+
+	var allProfiles []string
+	for p := range profileSet {
+		allProfiles = append(allProfiles, p)
+	}
+	sort.Strings(allProfiles)
+
+	return &ComposeProfiles{
+		AllProfiles:     allProfiles,
+		ServiceProfiles: serviceProfiles,
+	}, nil
+}
+
+// ComposeUpWithProfiles starts a compose project with optional profiles.
+func ComposeUpWithProfiles(ctx context.Context, projectPath string, profiles []string) error {
+	composePath, err := FindComposeFile(projectPath)
+	if err != nil {
+		return err
+	}
+	args := []string{"compose", "-f", composePath}
+	for _, p := range profiles {
+		args = append(args, "--profile", p)
+	}
+	args = append(args, "up", "-d")
+	var stderr bytes.Buffer
+	cmd := exec.CommandContext(ctx, "docker", args...)
+	cmd.Dir = projectPath
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if stderr.Len() > 0 {
+			return fmt.Errorf("compose up: %s", stderr.String())
+		}
+		return fmt.Errorf("compose up: %w", err)
+	}
+	return nil
+}
+
+// ComposeStopWithProfiles stops a compose project with optional profiles.
+func ComposeStopWithProfiles(ctx context.Context, projectPath string, profiles []string) error {
+	composePath, err := FindComposeFile(projectPath)
+	if err != nil {
+		return err
+	}
+	args := []string{"compose", "-f", composePath}
+	for _, p := range profiles {
+		args = append(args, "--profile", p)
+	}
+	args = append(args, "stop")
+	var stderr bytes.Buffer
+	cmd := exec.CommandContext(ctx, "docker", args...)
+	cmd.Dir = projectPath
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if stderr.Len() > 0 {
+			return fmt.Errorf("compose stop: %s", stderr.String())
+		}
+		return fmt.Errorf("compose stop: %w", err)
+	}
+	return nil
+}
+
+// ComposeDownWithProfiles stops and removes containers with optional profiles.
+func ComposeDownWithProfiles(ctx context.Context, projectPath string, profiles []string) error {
+	composePath, err := FindComposeFile(projectPath)
+	if err != nil {
+		return err
+	}
+	args := []string{"compose", "-f", composePath}
+	for _, p := range profiles {
+		args = append(args, "--profile", p)
+	}
+	args = append(args, "down")
+	var stderr bytes.Buffer
+	cmd := exec.CommandContext(ctx, "docker", args...)
+	cmd.Dir = projectPath
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if stderr.Len() > 0 {
+			return fmt.Errorf("compose down: %s", stderr.String())
+		}
+		return fmt.Errorf("compose down: %w", err)
+	}
+	return nil
+}
+
+// ComposeRestartWithProfiles restarts a compose project with optional profiles.
+func ComposeRestartWithProfiles(ctx context.Context, projectPath string, profiles []string) error {
+	composePath, err := FindComposeFile(projectPath)
+	if err != nil {
+		return err
+	}
+	args := []string{"compose", "-f", composePath}
+	for _, p := range profiles {
+		args = append(args, "--profile", p)
+	}
+	args = append(args, "restart")
+	var stderr bytes.Buffer
+	cmd := exec.CommandContext(ctx, "docker", args...)
+	cmd.Dir = projectPath
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if stderr.Len() > 0 {
+			return fmt.Errorf("compose restart: %s", stderr.String())
+		}
+		return fmt.Errorf("compose restart: %w", err)
 	}
 	return nil
 }

@@ -188,6 +188,7 @@ func (a App) menuServices() (string, string) {
 		ui.FormatMenuItem("s", "tart"),
 		ui.FormatMenuItem("S", "top"),
 		ui.FormatMenuItem("r", "estart"),
+		ui.FormatMenuItem("x", "remove"),
 		ui.FormatMenuItem("e", "xec"),
 		ui.FormatMenuItem("L", "ogs"),
 	)
@@ -339,6 +340,9 @@ func (a App) renderConfirmDialog() string {
 	case viewServices:
 		if a.servicesView.PendingDown() {
 			return ui.ErrorStyle.Render("Down (REMOVE containers) \"" + a.servicesView.PendingDownName() + "\"? [y/N]")
+		}
+		if a.servicesView.PendingRemove() {
+			return ui.ErrorStyle.Render("Remove container \"" + a.servicesView.PendingRemoveName() + "\"? [y/N]")
 		}
 	case viewVolumes:
 		if a.volumesView.PendingRemove() {

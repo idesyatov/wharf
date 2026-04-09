@@ -217,4 +217,3 @@ func parseRepoTag(img docker.Image) (string, string) {
 	}
 	return rt, "latest"
 }
-

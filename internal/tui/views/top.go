@@ -63,8 +63,8 @@ func NewTopViewContainer(containerID, containerName, image string) TopView {
 
 func (v TopView) IsProjectMode() bool     { return v.containerID == "" }
 func (v TopView) Project() docker.Project { return v.project }
-func (v TopView) ContainerID() string { return v.containerID }
-func (v TopView) HasStats() bool      { return len(v.stats) > 0 }
+func (v TopView) ContainerID() string     { return v.containerID }
+func (v TopView) HasStats() bool          { return len(v.stats) > 0 }
 
 func (v TopView) Breadcrumb() string {
 	if v.IsProjectMode() {

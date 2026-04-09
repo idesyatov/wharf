@@ -15,7 +15,7 @@ LDFLAGS := -s -w \
 LINT_INSTALL := go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest 2>/dev/null
 
 # Default target
-.PHONY: all build build-all run test vet lint clean \
+.PHONY: all build build-all run test vet lint fmt clean \
         docker-build docker-build-linux docker-build-darwin-amd64 docker-build-darwin-arm64 docker-build-windows docker-build-all \
         docker-run docker-test docker-vet docker-lint docker-deps docker-shell docker-clean docker-check \
         release help
@@ -56,6 +56,11 @@ vet:
 lint:
 	@echo "Running linter..."
 	@golangci-lint run || { echo "Lint failed"; exit 1; }
+
+fmt:
+	@echo "Formatting code..."
+	@gofmt -s -w .
+	@echo "✓ Formatted"
 
 clean:
 	@echo "Cleaning up..."
@@ -182,6 +187,7 @@ help:
 	@echo "  make test                       - Run unit tests"
 	@echo "  make vet                        - Run go vet"
 	@echo "  make lint                       - Run golangci-lint"
+	@echo "  make fmt                        - Format code (gofmt -s)"
 	@echo "  make clean                      - Remove build artifacts"
 	@echo ""
 	@echo "Docker (no local Go required):"
