@@ -309,7 +309,7 @@ func (a *App) cmdUp(parts []string) tea.Cmd {
 		return views.ComposeResultMsg{
 			ProjectName: pName,
 			Action:      "up",
-			Err:         docker.ComposeUpWithProfiles(context.Background(), pPath, profiles),
+			Err:         docker.ComposeUp(context.Background(), pPath, profiles...),
 		}
 	}
 }
@@ -343,7 +343,7 @@ func (a *App) cmdDown(parts []string) tea.Cmd {
 		return views.ComposeResultMsg{
 			ProjectName: pName,
 			Action:      "down",
-			Err:         docker.ComposeDownWithProfiles(context.Background(), pPath, profiles),
+			Err:         docker.ComposeDown(context.Background(), pPath, profiles...),
 		}
 	}
 }

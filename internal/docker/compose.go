@@ -101,80 +101,49 @@ func FindComposeFile(projectPath string) (string, error) {
 	return "", fmt.Errorf("no compose file found in %s", projectPath)
 }
 
-// ComposeUp starts a compose project with docker compose up -d.
-func ComposeUp(ctx context.Context, projectPath string) error {
+// composeExec runs `docker compose [--profile p...] <action> [extraArgs...]` in projectPath.
+func composeExec(ctx context.Context, projectPath, action string, profiles []string, extraArgs ...string) error {
 	composePath, err := FindComposeFile(projectPath)
 	if err != nil {
 		return err
 	}
+	args := []string{"compose", "-f", composePath}
+	for _, p := range profiles {
+		args = append(args, "--profile", p)
+	}
+	args = append(args, action)
+	args = append(args, extraArgs...)
 	var stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, "docker", "compose", "-f", composePath, "up", "-d")
+	cmd := exec.CommandContext(ctx, "docker", args...)
 	cmd.Dir = projectPath
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		if stderr.Len() > 0 {
-			return fmt.Errorf("compose up: %s", stderr.String())
+			return fmt.Errorf("compose %s: %s", action, stderr.String())
 		}
-		return fmt.Errorf("compose up: %w", err)
+		return fmt.Errorf("compose %s: %w", action, err)
 	}
 	return nil
 }
 
-// ComposeStop stops a compose project without removing containers.
-func ComposeStop(ctx context.Context, projectPath string) error {
-	composePath, err := FindComposeFile(projectPath)
-	if err != nil {
-		return err
-	}
-	var stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, "docker", "compose", "-f", composePath, "stop")
-	cmd.Dir = projectPath
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			return fmt.Errorf("compose stop: %s", stderr.String())
-		}
-		return fmt.Errorf("compose stop: %w", err)
-	}
-	return nil
+// ComposeUp starts a compose project with docker compose up -d, optionally filtered by profiles.
+func ComposeUp(ctx context.Context, projectPath string, profiles ...string) error {
+	return composeExec(ctx, projectPath, "up", profiles, "-d")
 }
 
-// ComposeDown stops and removes containers for a compose project.
-func ComposeDown(ctx context.Context, projectPath string) error {
-	composePath, err := FindComposeFile(projectPath)
-	if err != nil {
-		return err
-	}
-	var stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, "docker", "compose", "-f", composePath, "down")
-	cmd.Dir = projectPath
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			return fmt.Errorf("compose down: %s", stderr.String())
-		}
-		return fmt.Errorf("compose down: %w", err)
-	}
-	return nil
+// ComposeStop stops a compose project without removing containers, optionally filtered by profiles.
+func ComposeStop(ctx context.Context, projectPath string, profiles ...string) error {
+	return composeExec(ctx, projectPath, "stop", profiles)
 }
 
-// ComposeRestart restarts all services in a compose project.
-func ComposeRestart(ctx context.Context, projectPath string) error {
-	composePath, err := FindComposeFile(projectPath)
-	if err != nil {
-		return err
-	}
-	var stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, "docker", "compose", "-f", composePath, "restart")
-	cmd.Dir = projectPath
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			return fmt.Errorf("compose restart: %s", stderr.String())
-		}
-		return fmt.Errorf("compose restart: %w", err)
-	}
-	return nil
+// ComposeDown stops and removes containers for a compose project, optionally filtered by profiles.
+func ComposeDown(ctx context.Context, projectPath string, profiles ...string) error {
+	return composeExec(ctx, projectPath, "down", profiles)
+}
+
+// ComposeRestart restarts services in a compose project, optionally filtered by profiles.
+func ComposeRestart(ctx context.Context, projectPath string, profiles ...string) error {
+	return composeExec(ctx, projectPath, "restart", profiles)
 }
 
 // ComposeBuild builds images for a compose project or a specific service.
@@ -248,102 +217,6 @@ func ParseProfiles(projectPath string) (*ComposeProfiles, error) {
 		AllProfiles:     allProfiles,
 		ServiceProfiles: serviceProfiles,
 	}, nil
-}
-
-// ComposeUpWithProfiles starts a compose project with optional profiles.
-func ComposeUpWithProfiles(ctx context.Context, projectPath string, profiles []string) error {
-	composePath, err := FindComposeFile(projectPath)
-	if err != nil {
-		return err
-	}
-	args := []string{"compose", "-f", composePath}
-	for _, p := range profiles {
-		args = append(args, "--profile", p)
-	}
-	args = append(args, "up", "-d")
-	var stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, "docker", args...)
-	cmd.Dir = projectPath
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			return fmt.Errorf("compose up: %s", stderr.String())
-		}
-		return fmt.Errorf("compose up: %w", err)
-	}
-	return nil
-}
-
-// ComposeStopWithProfiles stops a compose project with optional profiles.
-func ComposeStopWithProfiles(ctx context.Context, projectPath string, profiles []string) error {
-	composePath, err := FindComposeFile(projectPath)
-	if err != nil {
-		return err
-	}
-	args := []string{"compose", "-f", composePath}
-	for _, p := range profiles {
-		args = append(args, "--profile", p)
-	}
-	args = append(args, "stop")
-	var stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, "docker", args...)
-	cmd.Dir = projectPath
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			return fmt.Errorf("compose stop: %s", stderr.String())
-		}
-		return fmt.Errorf("compose stop: %w", err)
-	}
-	return nil
-}
-
-// ComposeDownWithProfiles stops and removes containers with optional profiles.
-func ComposeDownWithProfiles(ctx context.Context, projectPath string, profiles []string) error {
-	composePath, err := FindComposeFile(projectPath)
-	if err != nil {
-		return err
-	}
-	args := []string{"compose", "-f", composePath}
-	for _, p := range profiles {
-		args = append(args, "--profile", p)
-	}
-	args = append(args, "down")
-	var stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, "docker", args...)
-	cmd.Dir = projectPath
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			return fmt.Errorf("compose down: %s", stderr.String())
-		}
-		return fmt.Errorf("compose down: %w", err)
-	}
-	return nil
-}
-
-// ComposeRestartWithProfiles restarts a compose project with optional profiles.
-func ComposeRestartWithProfiles(ctx context.Context, projectPath string, profiles []string) error {
-	composePath, err := FindComposeFile(projectPath)
-	if err != nil {
-		return err
-	}
-	args := []string{"compose", "-f", composePath}
-	for _, p := range profiles {
-		args = append(args, "--profile", p)
-	}
-	args = append(args, "restart")
-	var stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, "docker", args...)
-	cmd.Dir = projectPath
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			return fmt.Errorf("compose restart: %s", stderr.String())
-		}
-		return fmt.Errorf("compose restart: %w", err)
-	}
-	return nil
 }
 
 func calcServiceStatus(containers []Container) ServiceStatus {

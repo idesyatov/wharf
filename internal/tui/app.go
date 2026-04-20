@@ -43,6 +43,19 @@ type composeValidateResultMsg struct {
 	Output string
 }
 
+type FastTickMsg struct{}
+type SlowTickMsg struct{}
+
+const slowTickInterval = 10 * time.Second
+
+func fastTickCmd(d time.Duration) tea.Cmd {
+	return tea.Tick(d, func(time.Time) tea.Msg { return FastTickMsg{} })
+}
+
+func slowTickCmd(d time.Duration) tea.Cmd {
+	return tea.Tick(d, func(time.Time) tea.Msg { return SlowTickMsg{} })
+}
+
 type App struct {
 	state           viewState
 	prevState       viewState
@@ -113,7 +126,8 @@ func (a App) Init() tea.Cmd {
 	}
 	cmds := []tea.Cmd{
 		views.LoadProjects(a.docker),
-		views.TickCmd(a.cfg.PollInterval),
+		fastTickCmd(a.cfg.PollInterval),
+		slowTickCmd(slowTickInterval),
 		checkUpdateCmd(),
 	}
 	if a.eventsChan != nil {

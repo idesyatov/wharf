@@ -22,7 +22,6 @@ type BookmarkToggleMsg struct{ ProjectName string }
 
 type ProjectsLoadedMsg struct{ Projects []docker.Project }
 type ProjectsErrorMsg struct{ Err error }
-type TickMsg struct{}
 
 type ComposeUpMsg struct {
 	ProjectPath string
@@ -100,12 +99,6 @@ func LoadProjects(client *docker.Client) tea.Cmd {
 		}
 		return ProjectsLoadedMsg{Projects: projects}
 	}
-}
-
-func TickCmd(interval time.Duration) tea.Cmd {
-	return tea.Tick(interval, func(time.Time) tea.Msg {
-		return TickMsg{}
-	})
 }
 
 func (v ProjectsView) filtered() []docker.Project {

@@ -464,7 +464,22 @@ func (a App) handleEventReceived(msg views.EventReceivedMsg) (tea.Model, tea.Cmd
 	if a.state != viewEvents {
 		a.eventsNew++
 	}
-	return a, a.listenEvent()
+	cmds := []tea.Cmd{a.listenEvent()}
+	if isStructuralEvent(msg.Event) {
+		cmds = append(cmds, views.LoadProjects(a.docker))
+	}
+	return a, tea.Batch(cmds...)
+}
+
+func isStructuralEvent(ev docker.Event) bool {
+	if ev.Type != "container" {
+		return false
+	}
+	switch ev.Action {
+	case "start", "stop", "die", "create", "destroy", "kill", "pause", "unpause":
+		return true
+	}
+	return false
 }
 
 func (a App) handleSwitchToEvents(msg views.SwitchToEventsMsg) (tea.Model, tea.Cmd) {
@@ -677,8 +692,10 @@ func (a App) handleDataAndTick(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case views.ProjectsErrorMsg:
 		a.projectsView, _ = a.projectsView.Update(msg, a.keys)
 		return a, nil
-	case views.TickMsg:
-		return a.handleTick(msg)
+	case FastTickMsg:
+		return a.handleFastTick()
+	case SlowTickMsg:
+		return a.handleSlowTick()
 	case views.StatsLoadedMsg:
 		a.servicesView = a.servicesView.UpdateStats(msg.Stats)
 		return a, nil
@@ -715,11 +732,8 @@ func (a App) handleProjectsLoaded(msg views.ProjectsLoadedMsg) (tea.Model, tea.C
 	return a, cmd
 }
 
-func (a App) handleTick(msg views.TickMsg) (tea.Model, tea.Cmd) {
-	cmds := []tea.Cmd{
-		views.LoadProjects(a.docker),
-		views.TickCmd(a.cfg.PollInterval),
-	}
+func (a App) handleFastTick() (tea.Model, tea.Cmd) {
+	cmds := []tea.Cmd{fastTickCmd(a.cfg.PollInterval)}
 	if a.state == viewServices {
 		cmds = append(cmds, views.LoadStats(a.docker, a.servicesView.Project()))
 		cmds = append(cmds, views.LoadHealth(a.docker, a.servicesView.Project()))
@@ -732,6 +746,13 @@ func (a App) handleTick(msg views.TickMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	return a, tea.Batch(cmds...)
+}
+
+func (a App) handleSlowTick() (tea.Model, tea.Cmd) {
+	return a, tea.Batch(
+		views.LoadProjects(a.docker),
+		slowTickCmd(slowTickInterval),
+	)
 }
 
 func (a App) handleBatchAction(msg views.BatchActionMsg) (tea.Model, tea.Cmd) {
