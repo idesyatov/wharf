@@ -133,7 +133,9 @@ func (a App) handleViewSwitch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case views.SwitchToServicesMsg:
 		a.state = viewServices
-		a.servicesView = views.NewServicesView(msg.Project, a.cfg.CustomCommands).SetSize(a.width, a.height-5)
+		a.servicesView = views.NewServicesView(msg.Project, a.cfg.CustomCommands).
+			SetSize(a.width, a.height-5).
+			SetShowAll(a.projectsView.ShowAll())
 		if msg.Project.Path != "" {
 			if profiles, err := docker.ParseProfiles(msg.Project.Path); err == nil {
 				a.servicesView = a.servicesView.SetProfiles(profiles)
@@ -232,8 +234,17 @@ func (a App) handleResourceMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a.handleBookmarkToggle(msg)
 	case views.CopyMsg:
 		return a.handleCopy(msg)
+	case views.StandaloneActionBlockedMsg:
+		return a.handleStandaloneBlocked()
 	}
 	return a.handleToolMsg(msg)
+}
+
+func (a App) handleStandaloneBlocked() (tea.Model, tea.Cmd) {
+	a.notification = "Compose actions not available for standalone containers"
+	a.notificationErr = true
+	a.notificationExp = time.Now().Add(3 * time.Second)
+	return a, tea.Tick(3*time.Second, func(time.Time) tea.Msg { return notificationClearMsg{} })
 }
 
 func (a App) handleSwitchToVolumes(msg views.SwitchToVolumesMsg) (tea.Model, tea.Cmd) {

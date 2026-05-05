@@ -166,21 +166,30 @@ func (a App) menuProjects() (string, string) {
 				ui.FormatMenuItem("Space", " toggle"),
 			)
 	}
+	aLabel := "ctive only"
+	if !a.projectsView.ShowAll() {
+		aLabel = "ll"
+	}
+	tools := joinMenuItems(
+		ui.FormatMenuItem("t", "op"),
+		ui.FormatMenuItem("i", "mages"),
+		ui.FormatMenuItem("E", "vents"),
+		ui.FormatMenuItem("D", "isk usage"),
+		ui.FormatMenuItem("H", "osts"),
+		ui.FormatMenuItem("a", aLabel),
+		ui.FormatMenuItem("*", "mark"),
+		ui.FormatMenuItem("/", "filter"),
+		ui.FormatMenuItem("?", "help"),
+	)
+	if p, ok := a.projectsView.CurrentProject(); ok && p.IsStandalone() {
+		return ui.MutedStyle.Render("standalone — compose actions unavailable"), tools
+	}
 	return joinMenuItems(
-			ui.FormatMenuItem("u", " compose up"),
-			ui.FormatMenuItem("d", " compose stop"),
-			ui.FormatMenuItem("X", " compose down"),
-			ui.FormatMenuItem("R", " compose restart"),
-		), joinMenuItems(
-			ui.FormatMenuItem("t", "op"),
-			ui.FormatMenuItem("i", "mages"),
-			ui.FormatMenuItem("E", "vents"),
-			ui.FormatMenuItem("D", "isk usage"),
-			ui.FormatMenuItem("H", "osts"),
-			ui.FormatMenuItem("*", "mark"),
-			ui.FormatMenuItem("/", "filter"),
-			ui.FormatMenuItem("?", "help"),
-		)
+		ui.FormatMenuItem("u", " compose up"),
+		ui.FormatMenuItem("d", " compose stop"),
+		ui.FormatMenuItem("X", " compose down"),
+		ui.FormatMenuItem("R", " compose restart"),
+	), tools
 }
 
 func (a App) menuServices() (string, string) {
@@ -195,13 +204,25 @@ func (a App) menuServices() (string, string) {
 	toolsItems := []string{
 		ui.FormatMenuItem("t", "op"),
 		ui.FormatMenuItem("F", "iles"),
-		ui.FormatMenuItem("b", "uild"),
-		ui.FormatMenuItem("c", "ompose"),
-		ui.FormatMenuItem("v", "ol"),
-		ui.FormatMenuItem("n", "et"),
+	}
+	if !a.servicesView.IsStandalone() {
+		toolsItems = append(toolsItems,
+			ui.FormatMenuItem("b", "uild"),
+			ui.FormatMenuItem("c", "ompose"),
+			ui.FormatMenuItem("v", "ol"),
+			ui.FormatMenuItem("n", "et"),
+		)
+	} else {
+		aLabel := "ctive only"
+		if !a.servicesView.ShowAll() {
+			aLabel = "ll"
+		}
+		toolsItems = append(toolsItems, ui.FormatMenuItem("a", aLabel))
+	}
+	toolsItems = append(toolsItems,
 		ui.FormatMenuItem("/", "filter"),
 		ui.FormatMenuItem("?", "help"),
-	}
+	)
 	for _, cc := range a.servicesView.CustomCommands() {
 		toolsItems = append(toolsItems, ui.FormatMenuItem(cc.Key, " "+cc.Name))
 	}

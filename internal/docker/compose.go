@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -19,6 +20,8 @@ const (
 	labelOneoff     = "com.docker.compose.oneoff"
 )
 
+const StandaloneProjectName = "(standalone)"
+
 func (c *Client) ListProjects(ctx context.Context) ([]Project, error) {
 	containers, err := c.ListContainers(ctx)
 	if err != nil {
@@ -29,10 +32,34 @@ func (c *Client) ListProjects(ctx context.Context) ([]Project, error) {
 	serviceMap := make(map[string]map[string]*Service) // project -> service -> *Service
 
 	for _, ct := range containers {
-		projName := ct.Labels[labelProject]
-		if projName == "" {
+		if isDockerDesktopInternal(ct) {
 			continue
 		}
+
+		projName := ct.Labels[labelProject]
+
+		if projName == "" {
+			if _, ok := projectMap[StandaloneProjectName]; !ok {
+				projectMap[StandaloneProjectName] = &Project{
+					Name: StandaloneProjectName,
+					Path: "",
+				}
+				serviceMap[StandaloneProjectName] = make(map[string]*Service)
+			}
+			svcName := ct.Name
+			svc, ok := serviceMap[StandaloneProjectName][svcName]
+			if !ok {
+				svc = &Service{
+					Name:    svcName,
+					Project: StandaloneProjectName,
+					Image:   ct.Image,
+				}
+				serviceMap[StandaloneProjectName][svcName] = svc
+			}
+			svc.Containers = append(svc.Containers, ct)
+			continue
+		}
+
 		if ct.Labels[labelOneoff] == "True" {
 			continue
 		}
@@ -76,7 +103,13 @@ func (c *Client) ListProjects(ctx context.Context) ([]Project, error) {
 		projects = append(projects, *proj)
 	}
 
-	sort.Slice(projects, func(i, j int) bool {
+	sort.SliceStable(projects, func(i, j int) bool {
+		if projects[i].IsStandalone() {
+			return false
+		}
+		if projects[j].IsStandalone() {
+			return true
+		}
 		return projects[i].Name < projects[j].Name
 	})
 
@@ -217,6 +250,26 @@ func ParseProfiles(projectPath string) (*ComposeProfiles, error) {
 		AllProfiles:     allProfiles,
 		ServiceProfiles: serviceProfiles,
 	}, nil
+}
+
+// isDockerDesktopInternal returns true for Docker Desktop internal service containers
+// that should be hidden from the user.
+func isDockerDesktopInternal(ct Container) bool {
+	workDir := ct.Labels[labelWorkingDir]
+	if strings.Contains(workDir, "docker-desktop-bind-mounts") {
+		return true
+	}
+	if strings.Contains(workDir, "docker-desktop") {
+		return true
+	}
+
+	image := ct.Image
+	if strings.HasPrefix(image, "docker/desktop-") ||
+		strings.HasPrefix(image, "docker.io/docker/desktop-") {
+		return true
+	}
+
+	return false
 }
 
 func calcServiceStatus(containers []Container) ServiceStatus {

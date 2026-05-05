@@ -219,7 +219,9 @@ func (a *App) cmdGo(parts []string) tea.Cmd {
 	for _, p := range a.projectsView.Projects() {
 		if strings.Contains(strings.ToLower(p.Name), query) {
 			a.state = viewServices
-			a.servicesView = views.NewServicesView(p, a.cfg.CustomCommands).SetSize(a.width, a.height-7)
+			a.servicesView = views.NewServicesView(p, a.cfg.CustomCommands).
+				SetSize(a.width, a.height-7).
+				SetShowAll(a.projectsView.ShowAll())
 			if p.Path != "" {
 				if profiles, err := docker.ParseProfiles(p.Path); err == nil {
 					a.servicesView = a.servicesView.SetProfiles(profiles)
@@ -263,12 +265,18 @@ func (a *App) cmdExec(parts []string) tea.Cmd {
 func (a *App) cmdValidate(parts []string) tea.Cmd {
 	var projectPath string
 	if a.state == viewServices {
+		if a.servicesView.IsStandalone() {
+			return a.notifyErr("validate: not available for standalone containers", 3*time.Second)
+		}
 		projectPath = a.servicesView.ProjectPath()
 	}
 	if len(parts) > 1 {
 		query := strings.ToLower(parts[1])
 		for _, p := range a.projectsView.Projects() {
 			if strings.Contains(strings.ToLower(p.Name), query) {
+				if p.IsStandalone() {
+					return a.notifyErr("validate: not available for standalone containers", 3*time.Second)
+				}
 				projectPath = p.Path
 				break
 			}
@@ -283,6 +291,9 @@ func (a *App) cmdValidate(parts []string) tea.Cmd {
 func (a *App) cmdUp(parts []string) tea.Cmd {
 	if a.state != viewServices {
 		return a.notifyErr("up: only in Services view", 3*time.Second)
+	}
+	if a.servicesView.IsStandalone() {
+		return a.notifyErr("up: not available for standalone containers", 3*time.Second)
 	}
 	projectName := a.servicesView.ProjectName()
 	projectPath := a.servicesView.ProjectPath()
@@ -317,6 +328,9 @@ func (a *App) cmdUp(parts []string) tea.Cmd {
 func (a *App) cmdDown(parts []string) tea.Cmd {
 	if a.state != viewServices {
 		return a.notifyErr("down: only in Services view", 3*time.Second)
+	}
+	if a.servicesView.IsStandalone() {
+		return a.notifyErr("down: not available for standalone containers", 3*time.Second)
 	}
 	projectName := a.servicesView.ProjectName()
 	projectPath := a.servicesView.ProjectPath()

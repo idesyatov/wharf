@@ -86,14 +86,23 @@ type ServicesView struct {
 	customCommands  []config.CustomCommand
 	profiles        *docker.ComposeProfiles
 	pendingRemove   bool
+	showAll         bool
 }
 
 func NewServicesView(project docker.Project, customCommands []config.CustomCommand) ServicesView {
 	return ServicesView{
 		project:        project,
 		customCommands: customCommands,
+		showAll:        true,
 	}
 }
+
+func (v ServicesView) SetShowAll(showAll bool) ServicesView {
+	v.showAll = showAll
+	return v
+}
+
+func (v ServicesView) ShowAll() bool { return v.showAll }
 
 func (v ServicesView) CustomCommands() []config.CustomCommand { return v.customCommands }
 func (v ServicesView) Profiles() *docker.ComposeProfiles      { return v.profiles }
@@ -113,6 +122,7 @@ func (v ServicesView) Project() docker.Project { return v.project }
 func (v ServicesView) Breadcrumb() string      { return "› " + v.project.Name }
 func (v ServicesView) ProjectName() string     { return v.project.Name }
 func (v ServicesView) ProjectPath() string     { return v.project.Path }
+func (v ServicesView) IsStandalone() bool      { return v.project.IsStandalone() }
 func (v ServicesView) FilterMode() bool        { return v.filterMode }
 func (v ServicesView) FilterText() string      { return v.filterText }
 func (v ServicesView) PendingDown() bool       { return v.pendingDown }
@@ -202,6 +212,16 @@ func (v ServicesView) filtered() []docker.Service {
 				src = append(src, s)
 			}
 		}
+	}
+	// Active-only mode: hide stopped services (only for standalone project)
+	if v.IsStandalone() && !v.showAll {
+		var active []docker.Service
+		for _, s := range src {
+			if s.Status != docker.StatusStopped {
+				active = append(active, s)
+			}
+		}
+		src = active
 	}
 	v.applySortServices(src)
 	return src
@@ -406,6 +426,17 @@ func (v ServicesView) handleNavAndActions(msg tea.KeyMsg, keys ui.KeyMap, filter
 		}
 	case msg.String() == "g":
 		v.pendingG = true
+	case msg.String() == "a":
+		if v.IsStandalone() {
+			v.showAll = !v.showAll
+			f := v.filtered()
+			if len(f) == 0 {
+				v.cursor = 0
+			} else if v.cursor >= len(f) {
+				v.cursor = len(f) - 1
+			}
+		}
+		return v, nil
 	case ui.MatchKey(msg, keys.Search):
 		v.filterMode = true
 		v.filterText = ""
@@ -516,6 +547,14 @@ func (v ServicesView) handleServiceTools(msg tea.KeyMsg, keys ui.KeyMap, filtere
 }
 
 func (v ServicesView) handleServiceSwitches(msg tea.KeyMsg, keys ui.KeyMap, filtered []docker.Service) (ServicesView, tea.Cmd) {
+	composeOnly := ui.MatchKey(msg, keys.Compose) ||
+		ui.MatchKey(msg, keys.Build) ||
+		ui.MatchKey(msg, keys.BuildAll) ||
+		ui.MatchKey(msg, keys.EnvFile)
+	if composeOnly && v.IsStandalone() {
+		return v, func() tea.Msg { return StandaloneActionBlockedMsg{} }
+	}
+
 	switch {
 	case ui.MatchKey(msg, keys.Compose):
 		return v, func() tea.Msg {

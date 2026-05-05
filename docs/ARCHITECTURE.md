@@ -29,7 +29,7 @@ Wharf — TUI-утилита для управления Docker Compose стек
 |  FileBrowser                                                |
 +-------------------------------------------------------------+
 |                    Navigation Layer                         |
-|  Vim keys, Command mode (:q, :go, :exec, :theme, :validate)|
+|  Vim keys, Command mode (:q, :go, :exec, :theme, :validate) |
 |  Filter (/), Sort (1-6), Bulk (Space), Mouse, Tab-complete  |
 +-------------------------------------------------------------+
 |                      Domain Layer                           |

@@ -50,6 +50,12 @@ type Project struct {
 	Services []Service
 }
 
+// IsStandalone returns true if the project is a virtual standalone project
+// (containers not managed by Docker Compose).
+func (p Project) IsStandalone() bool {
+	return p.Path == ""
+}
+
 // ContainerDetail contains extended container information from docker inspect.
 type ContainerDetail struct {
 	Container

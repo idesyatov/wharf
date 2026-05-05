@@ -283,6 +283,13 @@ var helpText = strings.TrimSpace(`
     ?                 Show this help
     q                 Quit
 
+  Standalone containers
+    Containers started with 'docker run' (without Compose)
+    appear in the (standalone) project (always last in the list).
+    Compose actions (up/down/build/edit) are not available.
+    Container actions (logs/exec/top/restart/stop) work normally.
+    a                 Toggle show all / active only (standalone)
+
                       Press ? or Esc to close
 `)
 

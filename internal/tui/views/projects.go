@@ -50,6 +50,8 @@ type BatchActionMsg struct {
 	Projects []docker.Project
 }
 
+type StandaloneActionBlockedMsg struct{}
+
 type ProjectsView struct {
 	projects        []docker.Project
 	cursor          int
@@ -67,10 +69,11 @@ type ProjectsView struct {
 	sortColumn      int
 	sortReverse     bool
 	selected        map[int]bool
+	showAll         bool
 }
 
 func NewProjectsView(pollInterval time.Duration, cfg *config.Config) ProjectsView {
-	return ProjectsView{pollInterval: pollInterval, cfg: cfg}
+	return ProjectsView{pollInterval: pollInterval, cfg: cfg, showAll: false}
 }
 
 func (v ProjectsView) SetSize(w, h int) ProjectsView {
@@ -87,6 +90,15 @@ func (v ProjectsView) PendingDownName() string    { return v.pendingDownName }
 func (v ProjectsView) SelectedCount() int         { return len(v.selected) }
 func (v ProjectsView) HasSelected() bool          { return len(v.selected) > 0 }
 func (v ProjectsView) Projects() []docker.Project { return v.projects }
+func (v ProjectsView) ShowAll() bool               { return v.showAll }
+
+func (v ProjectsView) CurrentProject() (docker.Project, bool) {
+	filtered := v.filtered()
+	if v.cursor >= 0 && v.cursor < len(filtered) {
+		return filtered[v.cursor], true
+	}
+	return docker.Project{}, false
+}
 
 func LoadProjects(client *docker.Client) tea.Cmd {
 	return func() tea.Msg {
@@ -113,6 +125,17 @@ func (v ProjectsView) filtered() []docker.Project {
 				src = append(src, p)
 			}
 		}
+	}
+	// Active-only mode: hide standalone if it has no running containers
+	if !v.showAll {
+		var pruned []docker.Project
+		for _, p := range src {
+			if p.IsStandalone() && p.Status == docker.StatusStopped {
+				continue
+			}
+			pruned = append(pruned, p)
+		}
+		src = pruned
 	}
 	// Sort: bookmarked first
 	if v.cfg != nil && len(v.cfg.Bookmarks) > 0 {
@@ -153,6 +176,10 @@ func runningCount(p docker.Project) int {
 
 func (v ProjectsView) applySortProjects(ps []docker.Project) {
 	sort.SliceStable(ps, func(i, j int) bool {
+		// standalone project always last, regardless of sort column
+		if ps[i].IsStandalone() != ps[j].IsStandalone() {
+			return !ps[i].IsStandalone()
+		}
 		var less bool
 		switch v.sortColumn {
 		case 0: // NAME
@@ -283,6 +310,15 @@ func (v ProjectsView) handleNavAndActions(msg tea.KeyMsg, keys ui.KeyMap, filter
 		}
 	case msg.String() == "g":
 		v.pendingG = true
+	case msg.String() == "a":
+		v.showAll = !v.showAll
+		filtered := v.filtered()
+		if len(filtered) == 0 {
+			v.cursor = 0
+		} else if v.cursor >= len(filtered) {
+			v.cursor = len(filtered) - 1
+		}
+		return v, nil
 	case ui.MatchKey(msg, keys.Search):
 		v.filterMode = true
 		v.filterText = ""
@@ -340,10 +376,18 @@ func (v ProjectsView) handleProjectActions(msg tea.KeyMsg, keys ui.KeyMap, filte
 }
 
 func (v ProjectsView) handleComposeActions(msg tea.KeyMsg, keys ui.KeyMap, filtered []docker.Project) (ProjectsView, tea.Cmd) {
+	isComposeKey := ui.MatchKey(msg, keys.ComposeUp) ||
+		ui.MatchKey(msg, keys.ComposeStop) ||
+		ui.MatchKey(msg, keys.ComposeDown) ||
+		ui.MatchKey(msg, keys.ComposeRestart)
+	if isComposeKey && len(v.selected) == 0 && len(filtered) > 0 && filtered[v.cursor].IsStandalone() {
+		return v, func() tea.Msg { return StandaloneActionBlockedMsg{} }
+	}
+
 	switch {
 	case ui.MatchKey(msg, keys.ComposeUp):
 		if len(v.selected) > 0 {
-			return v, v.batchAction("up", filtered)
+			return v.runBatchOrBlock(msg, "up", filtered)
 		}
 		if len(filtered) > 0 {
 			p := filtered[v.cursor]
@@ -353,7 +397,7 @@ func (v ProjectsView) handleComposeActions(msg tea.KeyMsg, keys ui.KeyMap, filte
 		}
 	case ui.MatchKey(msg, keys.ComposeStop):
 		if len(v.selected) > 0 {
-			return v, v.batchAction("stop", filtered)
+			return v.runBatchOrBlock(msg, "stop", filtered)
 		}
 		if len(filtered) > 0 {
 			p := filtered[v.cursor]
@@ -363,7 +407,7 @@ func (v ProjectsView) handleComposeActions(msg tea.KeyMsg, keys ui.KeyMap, filte
 		}
 	case ui.MatchKey(msg, keys.ComposeDown):
 		if len(v.selected) > 0 {
-			return v, v.batchAction("down", filtered)
+			return v.runBatchOrBlock(msg, "down", filtered)
 		}
 		if len(filtered) > 0 {
 			p := filtered[v.cursor]
@@ -373,7 +417,7 @@ func (v ProjectsView) handleComposeActions(msg tea.KeyMsg, keys ui.KeyMap, filte
 		}
 	case ui.MatchKey(msg, keys.ComposeRestart):
 		if len(v.selected) > 0 {
-			return v, v.batchAction("restart", filtered)
+			return v.runBatchOrBlock(msg, "restart", filtered)
 		}
 		if len(filtered) > 0 {
 			p := filtered[v.cursor]
@@ -385,6 +429,21 @@ func (v ProjectsView) handleComposeActions(msg tea.KeyMsg, keys ui.KeyMap, filte
 		return v.handleProjectMisc(msg, keys, filtered)
 	}
 	return v, nil
+}
+
+func (v ProjectsView) runBatchOrBlock(_ tea.KeyMsg, action string, filtered []docker.Project) (ProjectsView, tea.Cmd) {
+	var composeProjects []docker.Project
+	for idx := range v.selected {
+		if idx < len(filtered) && !filtered[idx].IsStandalone() {
+			composeProjects = append(composeProjects, filtered[idx])
+		}
+	}
+	if len(composeProjects) == 0 {
+		return v, func() tea.Msg { return StandaloneActionBlockedMsg{} }
+	}
+	return v, func() tea.Msg {
+		return BatchActionMsg{Action: action, Projects: composeProjects}
+	}
 }
 
 func (v ProjectsView) handleProjectMisc(msg tea.KeyMsg, keys ui.KeyMap, filtered []docker.Project) (ProjectsView, tea.Cmd) {
