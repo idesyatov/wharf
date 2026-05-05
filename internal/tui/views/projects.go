@@ -596,18 +596,6 @@ func statusTextPlain(s docker.ServiceStatus) string {
 	}
 }
 
-func (v ProjectsView) batchAction(action string, filtered []docker.Project) tea.Cmd {
-	var projects []docker.Project
-	for idx := range v.selected {
-		if idx < len(filtered) {
-			projects = append(projects, filtered[idx])
-		}
-	}
-	return func() tea.Msg {
-		return BatchActionMsg{Action: action, Projects: projects}
-	}
-}
-
 func (v ProjectsView) SelectedProjects(filtered []docker.Project) []docker.Project {
 	var projects []docker.Project
 	for idx := range v.selected {
