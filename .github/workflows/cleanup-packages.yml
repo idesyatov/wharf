@@ -1,0 +1,22 @@
+name: Cleanup old packages
+
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types:
+      - completed
+
+permissions:
+  packages: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - uses: actions/delete-package-versions@v5
+        with:
+          package-name: wharf
+          package-type: container
+          min-versions-to-keep: 5
+          delete-only-untagged-versions: false

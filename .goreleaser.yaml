@@ -61,3 +61,39 @@ brews:
       bin.install "wharf"
     test: |
       system "#{bin}/wharf", "--version"
+
+dockers:
+  - image_templates:
+      - "ghcr.io/idesyatov/wharf:{{ .Version }}-amd64"
+      - "ghcr.io/idesyatov/wharf:latest-amd64"
+    use: buildx
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.source=https://github.com/idesyatov/wharf"
+    goarch: amd64
+
+  - image_templates:
+      - "ghcr.io/idesyatov/wharf:{{ .Version }}-arm64"
+      - "ghcr.io/idesyatov/wharf:latest-arm64"
+    use: buildx
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.source=https://github.com/idesyatov/wharf"
+    goarch: arm64
+
+docker_manifests:
+  - name_template: "ghcr.io/idesyatov/wharf:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/idesyatov/wharf:{{ .Version }}-amd64"
+      - "ghcr.io/idesyatov/wharf:{{ .Version }}-arm64"
+
+  - name_template: "ghcr.io/idesyatov/wharf:latest"
+    image_templates:
+      - "ghcr.io/idesyatov/wharf:latest-amd64"
+      - "ghcr.io/idesyatov/wharf:latest-arm64"
