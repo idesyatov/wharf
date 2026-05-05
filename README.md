@@ -6,7 +6,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/idesyatov/wharf)](https://goreportcard.com/report/github.com/idesyatov/wharf)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-A terminal UI for managing Docker Compose stacks. Inspired by [k9s](https://github.com/derailed/k9s).
+A terminal UI for managing Docker containers and Compose stacks. Inspired by [k9s](https://github.com/derailed/k9s).
 
 <p align="center">
   <img src="demo.gif" alt="Wharf Demo" width="800">
@@ -17,6 +17,7 @@ A terminal UI for managing Docker Compose stacks. Inspired by [k9s](https://gith
 - Browse and manage Docker Compose projects and services
 - Compose up / stop / down / restart / build / validate
 - Docker Compose profiles support (`:up <profile>` / `:up *`)
+- Standalone containers — manage `docker run` containers in a virtual `(standalone)` project
 - Exec into containers with shell banner
 - Real-time CPU/MEM/Network monitoring with braille charts (Top View)
 - Stream container logs with follow/pause and search
@@ -30,6 +31,8 @@ A terminal UI for managing Docker Compose stacks. Inspired by [k9s](https://gith
 - Command mode with Tab-autocomplete (:exec, :go, :validate, :theme, :host, :up...)
 - Remote Docker host via SSH (`:host ssh://user@server`)
 - Host Switcher (`H`) — saved hosts with add/delete, connect by name
+- Filter stopped standalone containers (toggle `a` — show all / active only)
+- Auto-hide Docker Desktop internal containers
 - Bookmark favorite projects (★), bulk operations (Space)
 - Vim-style navigation (hjkl, gg/G, /, :q, arrows)
 - Customizable themes (dark/light/custom YAML)
@@ -50,6 +53,12 @@ brew tap idesyatov/tap
 brew install wharf
 ```
 
+### Docker
+
+```bash
+docker pull ghcr.io/idesyatov/wharf:latest
+```
+
 ### Download binary
 
 Download from [GitHub Releases](https://github.com/idesyatov/wharf/releases):
@@ -61,6 +70,7 @@ Download from [GitHub Releases](https://github.com/idesyatov/wharf/releases):
 | macOS Intel | `wharf-vX.X.X-darwin-amd64.tar.gz` |
 | macOS Apple Silicon | `wharf-vX.X.X-darwin-arm64.tar.gz` |
 | Windows amd64 | `wharf-vX.X.X-windows-amd64.zip` |
+| Docker (any) | `docker pull ghcr.io/idesyatov/wharf:latest` |
 
 ### From source
 
@@ -89,6 +99,7 @@ wharf --config   # show config path and current settings
 | `gg` / `G` | Jump to top / bottom | All |
 | `1`–`6` | Sort by column | Tables |
 | `/` | Filter / search | All |
+| `a` | Toggle show all / active only | Projects, Services (standalone) |
 | `?` | Help | All |
 | `q` / `:q` | Quit | All |
 | | | |

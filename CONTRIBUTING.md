@@ -14,7 +14,7 @@ Go is **not** required locally — all commands run inside Docker.
    ```
 3. Build and run:
    ```bash
-   make docker-build-linux
+   make docker-build
    ./bin/wharf-linux-amd64
    ```
 
@@ -22,21 +22,27 @@ Go is **not** required locally — all commands run inside Docker.
 
 1. Create a branch: `git checkout -b feature/my-feature`
 2. Make your changes
-3. Verify: `make docker-build && make docker-vet && make docker-test`
+3. Verify: `make docker-check` (runs build + vet + test + lint)
 4. Commit with a descriptive message
 5. Push and open a Pull Request
+
+If `make` is not in your PATH, use docker compose directly:
+```bash
+docker compose -f docker-compose.dev.yml run --rm dev go vet ./...
+docker compose -f docker-compose.dev.yml run --rm dev go test -buildvcs=false ./...
+```
 
 ## Project Structure
 
 ```
 cmd/wharf/main.go         — entry point
 internal/config/          — configuration (YAML)
-internal/docker/          — Docker SDK wrapper
-internal/tui/             — TUI application (Bubbletea)
-internal/tui/views/       — individual view screens
-internal/ui/              — styles, keys, clipboard, themes
+internal/docker/          — Docker SDK wrapper (client.go, compose.go, types.go)
+internal/tui/             — TUI application (app.go, app_routing.go, app_render.go, app_commands.go)
+internal/tui/views/       — individual view screens (15+ views)
+internal/ui/              — styles, keys, clipboard, themes, braille charts
 internal/version/         — version and update check
-internal/util/            — utilities (browser open)
+internal/util/            — utilities (browser open, editor detect)
 ```
 
 ## Code Style

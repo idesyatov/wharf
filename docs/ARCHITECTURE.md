@@ -1,7 +1,7 @@
 # Архитектура — Wharf
 
 ## Обзор
-Wharf — TUI-утилита для управления Docker Compose стеками. Интерактивный терминальный интерфейс с vim-like навигацией для мониторинга и управления контейнерами.
+Wharf — TUI-утилита для управления Docker-контейнерами и Compose стеками. Интерактивный терминальный интерфейс с vim-like навигацией для мониторинга и управления контейнерами. Поддерживает как Compose-проекты, так и standalone-контейнеры (запущенные через `docker run`).
 
 ## Стек технологий
 
@@ -15,7 +15,7 @@ Wharf — TUI-утилита для управления Docker Compose стек
 | Compose CLI | os/exec -> docker compose |
 | Релизы | goreleaser v2 |
 | CI/CD | GitHub Actions (go vet, go test, golangci-lint) |
-| Дистрибуция | GitHub Releases, Homebrew tap |
+| Дистрибуция | GitHub Releases, Homebrew tap, Docker (ghcr.io) |
 
 ## Архитектура приложения
 
@@ -26,7 +26,7 @@ Wharf — TUI-утилита для управления Docker Compose стек
 |                         TUI Layer                           |
 |  Projects | Services | Detail | Logs | Compose | Top | Help |
 |  Volumes | Networks | Images | Events | System | EnvFile    |
-|  FileBrowser                                                |
+|  FileBrowser | Hosts                                        |
 +-------------------------------------------------------------+
 |                    Navigation Layer                         |
 |  Vim keys, Command mode (:q, :go, :exec, :theme, :validate) |
@@ -58,6 +58,7 @@ Projects --> Services --> Detail --> Logs
    +---> Images
    +---> Events
    +---> System (disk usage)
+   +---> Hosts (Host Switcher)
 
 Help (?) и Command mode (:) доступны из любого view
 ```
@@ -75,7 +76,10 @@ wharf/
 |   |   +-- version.go           # Version/Commit/BuildDate через ldflags
 |   |   +-- update.go            # CheckUpdate() через GitHub Releases API
 |   +-- tui/
-|   |   +-- app.go               # Корневая model, 14 viewState, 5-зонный layout
+|   |   +-- app.go               # Корневая model, Init, state, layout
+|   |   +-- app_routing.go       # Обработка всех Msg (navigation, data, ticks, events)
+|   |   +-- app_render.go        # View() и menu bar рендеринг
+|   |   +-- app_commands.go      # Command mode обработчики (:up, :down, :go, :exec, :validate)
 |   |   +-- cmdmode.go           # Command mode (:q, :theme, :go, :exec, :validate, Tab-complete)
 |   |   +-- views/
 |   |       +-- projects.go      # Список compose-проектов, bulk select, bookmarks
@@ -91,6 +95,8 @@ wharf/
 |   |       +-- system.go        # docker system df, prune
 |   |       +-- envfile.go       # .env file preview с подсветкой
 |   |       +-- filebrowser.go   # Просмотр файлов внутри контейнера (ls -la, cat)
+|   |       +-- hosts.go         # Host Switcher — список хостов, add/delete, connect
+|   |       +-- helpers.go       # Shared helpers для views
 |   |       +-- help.go          # Help screen с поиском (/, n/N)
 |   +-- ui/
 |   |   +-- keys.go              # 35+ keybindings, ApplyKeyBindings из конфига
@@ -102,13 +108,13 @@ wharf/
 |   +-- docker/
 |   |   +-- client.go            # Docker SDK обёртка: Stats, Inspect, Volumes, Networks, Images,
 |   |   |                        # Events, SystemDf, ExecOutput, DetectShell, SubscribeEvents
-|   |   +-- compose.go           # ListProjects, ComposeUp/Stop/Down/Restart/Build через os/exec
+|   |   +-- compose.go           # ListProjects (compose + standalone), composeExec helper, compose operations
 |   |   +-- types.go             # Container, Service, Project, Stats, Image, Event,
 |   |                            # Volume, Network, HealthCheck, SystemDf
 |   +-- util/
 |       +-- browser.go           # OpenBrowser кросс-платформа
 |       +-- editor.go            # DetectEditor ($VISUAL -> $EDITOR -> vi)
-+-- examples/                    # 3 тестовых compose-стека
++-- examples/                    # 4 тестовых compose-стека
 +-- .goreleaser.yaml             # goreleaser v2, 5 платформ, homebrew tap
 +-- .github/workflows/
 |   +-- release.yml              # goreleaser action
@@ -123,7 +129,7 @@ wharf/
 
 ```
 +--------------------------------------------------+
-| Wharf                     Docker: * local v0.6   |  <- Info bar
+| Wharf                     Docker: * local v0.9   |  <- Info bar
 +--------------------------------------------------+
 | > multi-service                                  |  <- Breadcrumbs
 +--------------------------------------------------+
@@ -152,8 +158,21 @@ Container Top View использует braille line charts для визуал�
 - MEM-график одноцветный по текущему уровню
 - Рамки через lipgloss.Border() (RoundedBorder)
 
+## Smart Polling
+
+Wharf использует двухуровневый polling для снижения нагрузки на Docker daemon:
+
+- **FastTick** (poll_interval, по умолчанию 2с) — обновление метрик (CPU/MEM/health/top)
+- **SlowTick** (10с) — обновление списка проектов и контейнеров
+- **Event-driven** — немедленное обновление при container start/stop/die/create/destroy
+
+Это снижает количество вызовов Docker API при большом числе контейнеров.
+
 ## Деплой / Дистрибуция
 - Один статический бинарник, zero dependencies
 - Кросс-компиляция: Linux amd64/arm64, macOS amd64/arm64, Windows amd64
-- goreleaser: автосборка + Homebrew formula при тегах v*
-- `brew tap idesyatov/tap && brew install wharf`
+- goreleaser: автосборка + Homebrew formula + Docker image при тегах v*
+- Docker: `docker pull ghcr.io/idesyatov/wharf:latest` (multi-arch: amd64/arm64)
+- Homebrew: `brew tap idesyatov/tap && brew install wharf`
+- Install-скрипт: `curl -sL .../install.sh | bash`
+- Ротация Docker-пакетов: хранение 5 последних версий
