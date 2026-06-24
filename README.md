@@ -6,11 +6,21 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/idesyatov/wharf)](https://goreportcard.com/report/github.com/idesyatov/wharf)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-A terminal UI for managing Docker containers and Compose stacks. Inspired by [k9s](https://github.com/derailed/k9s).
+A terminal UI for managing Docker containers and Compose stacks — a single static Go binary with vim-style navigation, live resource charts, log streaming, and exec, all without leaving the terminal. Inspired by [k9s](https://github.com/derailed/k9s).
 
 <p align="center">
   <img src="demo.gif" alt="Wharf Demo" width="800">
 </p>
+
+## Why Wharf?
+
+If you live in the terminal and juggle `docker ps`, `docker compose logs -f`, `docker stats`, and `docker exec` in separate panes, Wharf folds all of it into one interactive screen:
+
+- **See everything at once** — all Compose projects, services, and standalone `docker run` containers in one navigable list, with live status, CPU, and memory. No memorizing container names or IDs.
+- **Monitor in real time** — braille CPU/MEM/Network charts right in the TUI, no Grafana required.
+- **Act without typing commands** — up/down/restart/build, stream logs, exec into a shell, browse files inside a container — all one keypress away.
+- **Local and remote** — point Wharf at a remote Docker host over SSH (`:host ssh://user@server`) and manage it the same way.
+- **Zero setup** — single binary, no daemon, no config file needed to start. Vim keys (`hjkl`, `gg/G`, `/`, `:`).
 
 ## Features
 
@@ -40,11 +50,24 @@ A terminal UI for managing Docker containers and Compose stacks. Inspired by [k9
 
 ## Quick Start
 
-### Install (Linux/macOS)
+```bash
+# Linux / macOS — install and run
+curl -sL https://raw.githubusercontent.com/idesyatov/wharf/master/scripts/install.sh | bash
+wharf
+```
+
+See the sections below for other install methods, keybindings, command mode, and configuration.
+
+<details>
+<summary><b>Installation</b></summary>
+
+### Install script (Linux/macOS)
 
 ```bash
 curl -sL https://raw.githubusercontent.com/idesyatov/wharf/master/scripts/install.sh | bash
 ```
+
+Installs to `/usr/local/bin` as root, or `~/.local/bin` as a regular user.
 
 ### Homebrew
 
@@ -80,7 +103,10 @@ cd wharf
 make docker-build-all    # Go not required — builds via Docker
 ```
 
-## Usage
+</details>
+
+<details>
+<summary><b>Usage</b></summary>
 
 ```bash
 wharf            # start TUI
@@ -88,8 +114,10 @@ wharf --version  # show version
 wharf --config   # show config path and current settings
 ```
 
+</details>
+
 <details>
-<summary>Keybindings</summary>
+<summary><b>Keybindings</b></summary>
 
 | Key | Action | Context |
 |-----|--------|---------|
@@ -133,7 +161,7 @@ wharf --config   # show config path and current settings
 </details>
 
 <details>
-<summary>Command Mode (press <code>:</code> then Tab to autocomplete)</summary>
+<summary><b>Command Mode</b> (press <code>:</code> then Tab to autocomplete)</summary>
 
 | Command | Action |
 |---------|--------|
@@ -154,7 +182,7 @@ wharf --config   # show config path and current settings
 </details>
 
 <details>
-<summary>Custom Commands</summary>
+<summary><b>Custom Commands</b></summary>
 
 Define custom commands in config — they appear in Services View menu bar:
 
@@ -173,7 +201,8 @@ Template variables: `{{.ContainerID}}`, `{{.ContainerName}}`, `{{.Image}}`, `{{.
 
 </details>
 
-## Configuration
+<details>
+<summary><b>Configuration</b></summary>
 
 ```yaml
 # ~/.config/wharf/config.yaml
@@ -196,7 +225,10 @@ keybindings:
 
 Custom themes: `~/.config/wharf/themes/<n>.yaml`
 
-## Examples
+</details>
+
+<details>
+<summary><b>Examples</b></summary>
 
 See [examples/](examples/) for sample compose projects:
 
@@ -206,6 +238,8 @@ See [examples/](examples/) for sample compose projects:
 | `multi-service` | App + worker + Redis + API |
 | `with-volumes` | Services with persistent volumes |
 | `with-profiles` | Compose profiles (debug, monitoring, test) |
+
+</details>
 
 ## Tech Stack
 

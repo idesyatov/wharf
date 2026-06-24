@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d1117"/>
+      <stop offset="1" stop-color="#161b22"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2496ed"/>
+      <stop offset="1" stop-color="#2dd4bf"/>
+    </linearGradient>
+  </defs>
+
+  <!-- background -->
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect width="1280" height="6" fill="url(#accent)"/>
+
+  <!-- ===== left: branding ===== -->
+  <g transform="translate(80, 150)">
+    <text x="0" y="80" font-size="120" fill="#2dd4bf">⚓</text>
+    <text x="150" y="80" font-size="118" font-weight="700" fill="#f0f6fc">Wharf</text>
+
+    <text x="6" y="160" font-size="38" font-weight="500" fill="#c9d1d9">A terminal UI for Docker</text>
+    <text x="6" y="208" font-size="38" font-weight="500" fill="#c9d1d9">containers &amp; Compose stacks</text>
+
+    <text x="6" y="270" font-size="24" fill="#8b949e">Inspired by k9s · Single binary · Vim-style</text>
+
+    <!-- feature pills -->
+    <g font-size="22" fill="#2dd4bf">
+      <rect x="0"   y="300" width="190" height="46" rx="23" fill="#1f2630" stroke="#2496ed" stroke-opacity="0.4"/>
+      <text x="24" y="330">Live charts</text>
+      <rect x="206" y="300" width="150" height="46" rx="23" fill="#1f2630" stroke="#2496ed" stroke-opacity="0.4"/>
+      <text x="230" y="330">Logs</text>
+      <rect x="372" y="300" width="150" height="46" rx="23" fill="#1f2630" stroke="#2496ed" stroke-opacity="0.4"/>
+      <text x="396" y="330">Exec</text>
+    </g>
+
+    <text x="6" y="420" font-size="22" fill="#6e7681">github.com/idesyatov/wharf</text>
+  </g>
+
+  <!-- ===== right: mock TUI window ===== -->
+  <g transform="translate(700, 130)">
+    <rect width="500" height="380" rx="12" fill="#010409" stroke="#30363d" stroke-width="1.5"/>
+    <!-- title bar -->
+    <rect width="500" height="40" rx="12" fill="#161b22"/>
+    <rect y="28" width="500" height="12" fill="#161b22"/>
+    <circle cx="24" cy="20" r="6" fill="#ff5f56"/>
+    <circle cx="46" cy="20" r="6" fill="#ffbd2e"/>
+    <circle cx="68" cy="20" r="6" fill="#27c93f"/>
+    <text x="250" y="26" font-size="16" fill="#8b949e" text-anchor="middle" font-family="monospace">wharf — Projects</text>
+
+    <!-- table header (aligned columns) -->
+    <g font-family="monospace" font-size="16" fill="#6e7681">
+      <text x="40"  y="78">NAME</text>
+      <text x="210" y="78">STATUS</text>
+      <text x="330" y="78">CPU%</text>
+      <text x="410" y="78">MEM</text>
+    </g>
+
+    <!-- selected row highlight -->
+    <rect x="14" y="92" width="472" height="26" rx="4" fill="#1f6feb" fill-opacity="0.25"/>
+
+    <!-- table rows -->
+    <g font-family="monospace" font-size="17">
+      <text x="24"  y="111" fill="#2dd4bf">▸</text>
+      <text x="40"  y="111" fill="#f0f6fc">web-stack</text>
+      <text x="210" y="111" fill="#27c93f">● running</text>
+      <text x="330" y="111" fill="#f0f6fc">12.4</text>
+      <text x="410" y="111" fill="#f0f6fc">256M</text>
+
+      <text x="40"  y="145" fill="#c9d1d9">api</text>
+      <text x="210" y="145" fill="#27c93f">● running</text>
+      <text x="330" y="145" fill="#c9d1d9">8.1</text>
+      <text x="410" y="145" fill="#c9d1d9">180M</text>
+
+      <text x="40"  y="179" fill="#c9d1d9">redis</text>
+      <text x="210" y="179" fill="#27c93f">● running</text>
+      <text x="330" y="179" fill="#c9d1d9">1.2</text>
+      <text x="410" y="179" fill="#c9d1d9">42M</text>
+
+      <text x="40"  y="213" fill="#c9d1d9">worker</text>
+      <text x="210" y="213" fill="#8b949e">◌ exited</text>
+      <text x="330" y="213" fill="#6e7681">—</text>
+      <text x="410" y="213" fill="#6e7681">—</text>
+    </g>
+
+    <!-- CPU line chart -->
+    <text x="24" y="250" font-size="14" font-family="monospace" fill="#6e7681">CPU</text>
+    <polygon points="24,296 24,290 68,272 112,284 156,266 200,278 244,260 288,274 332,268 376,256 420,272 464,264 464,296"
+             fill="#2dd4bf" fill-opacity="0.15"/>
+    <polyline points="24,290 68,272 112,284 156,266 200,278 244,260 288,274 332,268 376,256 420,272 464,264"
+              fill="none" stroke="#2dd4bf" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+
+    <!-- MEM line chart -->
+    <text x="24" y="316" font-size="14" font-family="monospace" fill="#6e7681">MEM</text>
+    <polygon points="24,344 24,338 68,330 112,334 156,326 200,332 244,322 288,330 332,328 376,320 420,330 464,326 464,344"
+             fill="#2496ed" fill-opacity="0.15"/>
+    <polyline points="24,338 68,330 112,334 156,326 200,332 244,322 288,330 332,328 376,320 420,330 464,326"
+              fill="none" stroke="#2496ed" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+
+    <!-- status bar -->
+    <rect y="350" width="500" height="30" fill="#161b22"/>
+    <text x="14" y="370" font-size="14" font-family="monospace" fill="#8b949e">[u]p [d]own [L]ogs [e]xec [t]op  :cmd</text>
+  </g>
+</svg>
